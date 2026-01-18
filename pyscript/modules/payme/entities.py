@@ -22,7 +22,7 @@ ENTITY_GOOGLE_AUTH_HEALTHY = 'binary_sensor.payme_google_auth_healthy'
 ENTITY_LAST_POLL = 'sensor.payme_last_poll'
 
 
-def set_state(entity_id: str, state: Any, attributes: dict = None) -> None:
+def set_state(entity_id: str, value: Any, attributes: dict = None) -> None:
     """
     Set entity state in Home Assistant.
 
@@ -32,7 +32,7 @@ def set_state(entity_id: str, state: Any, attributes: dict = None) -> None:
         attributes = {}
 
     # pyscript provides state.set globally
-    state.set(entity_id, state, attributes)
+    state.set(entity_id, value, attributes)
 
 
 def update_pending_bills(bills: list[dict]) -> None:
@@ -48,8 +48,8 @@ def update_pending_bills(bills: list[dict]) -> None:
     failed = [b for b in bills if b.get('status') == 'failed']
 
     # Count warnings
-    duplicates = sum(1 for b in pending if b.get('duplicate_warning'))
-    low_confidence = sum(1 for b in pending if b.get('low_confidence'))
+    duplicates = len([b for b in pending if b.get('duplicate_warning')])
+    low_confidence = len([b for b in pending if b.get('low_confidence')])
 
     # Pending bills
     set_state(
@@ -58,7 +58,7 @@ def update_pending_bills(bills: list[dict]) -> None:
         {
             'bills': json.dumps(pending),
             'count': len(pending),
-            'total_amount': sum(b.get('amount', 0) for b in pending),
+            'total_amount': sum([b.get('amount', 0) for b in pending]),
             'duplicate_warnings': duplicates,
             'low_confidence_warnings': low_confidence,
             'friendly_name': 'Pending Bills',
@@ -74,7 +74,7 @@ def update_pending_bills(bills: list[dict]) -> None:
         {
             'bills': json.dumps(pending_funding),
             'count': len(pending_funding),
-            'total_amount': sum(b.get('amount', 0) for b in pending_funding),
+            'total_amount': sum([b.get('amount', 0) for b in pending_funding]),
             'friendly_name': 'Pending Funding',
             'icon': 'mdi:cash-clock',
             'unit_of_measurement': 'bills',
@@ -171,7 +171,7 @@ def update_payment_history(history: list[dict], limit: int = 50) -> None:
             'total_count': len(history),
             'paid_count': len(paid),
             'rejected_count': len(rejected),
-            'total_paid': sum(h.get('amount', 0) for h in paid),
+            'total_paid': sum([h.get('amount', 0) for h in paid]),
             'friendly_name': 'Payment History',
             'icon': 'mdi:history',
             'unit_of_measurement': 'payments',
@@ -246,19 +246,19 @@ def update_statistics(history: list[dict]) -> None:
     ]
 
     # Calculate averages
-    monthly_total = sum(h.get('amount', 0) for h in this_month)
-    yearly_total = sum(h.get('amount', 0) for h in this_year)
+    monthly_total = sum([h.get('amount', 0) for h in this_month])
+    yearly_total = sum([h.get('amount', 0) for h in this_year])
 
     avg_payment = 0
     if paid:
-        avg_payment = sum(h.get('amount', 0) for h in paid) / len(paid)
+        avg_payment = sum([h.get('amount', 0) for h in paid]) / len(paid)
 
     stats = {
         'monthly_total': round(monthly_total, 2),
         'monthly_count': len(this_month),
         'yearly_total': round(yearly_total, 2),
         'yearly_count': len(this_year),
-        'all_time_total': round(sum(h.get('amount', 0) for h in paid), 2),
+        'all_time_total': round(sum([h.get('amount', 0) for h in paid]), 2),
         'all_time_count': len(paid),
         'average_payment': round(avg_payment, 2),
         'current_month': current_month,
