@@ -180,14 +180,14 @@ def save_tokens(tokens: dict, client_id: str, client_secret: str) -> Path:
     return GOOGLE_TOKENS_FILE
 
 
-def run_oauth_flow(credentials_path: Path) -> bool:
+def run_oauth_flow(credentials_path: Path, manual: bool = False) -> bool:
     """
     Run complete OAuth flow.
 
     1. Load client credentials
-    2. Start local callback server
+    2. Start local callback server (or manual code entry)
     3. Open browser for authorization
-    4. Wait for callback
+    4. Wait for callback (or paste code)
     5. Exchange code for tokens
     6. Save tokens
 
@@ -202,33 +202,59 @@ def run_oauth_flow(credentials_path: Path) -> bool:
     # Build authorization URL
     auth_url = build_auth_url(client_id)
 
-    # Start local server
-    print(f'\nStarting callback server on {REDIRECT_URI}...')
-    server = HTTPServer((REDIRECT_HOST, REDIRECT_PORT), OAuthCallbackHandler)
-    server.timeout = 300  # 5 minute timeout
+    if manual:
+        # Manual code entry mode
+        print('\n' + '='*60)
+        print('MANUAL AUTHORIZATION MODE')
+        print('='*60)
+        print('\n1. Visit this URL in your browser:\n')
+        print(auth_url)
+        print('\n2. Sign in and authorize the application')
+        print('\n3. You will be redirected to a localhost URL that won\'t load.')
+        print('   Copy the ENTIRE URL from your browser address bar.')
+        print('\n4. Paste the URL here and press Enter:\n')
 
-    # Open browser
-    print('\nOpening browser for Google authorization...')
-    print(f'If browser does not open, visit:\n{auth_url}\n')
-    webbrowser.open(auth_url)
+        redirect_url = input('Paste URL: ').strip()
 
-    print('Waiting for authorization...')
+        # Extract code from URL
+        parsed = urlparse(redirect_url)
+        params = parse_qs(parsed.query)
 
-    # Wait for callback
-    OAuthCallbackHandler.authorization_code = None
-    OAuthCallbackHandler.error = None
+        if 'code' not in params:
+            print('\nError: No authorization code found in URL')
+            print('Make sure you copied the entire URL including ?code=...')
+            return False
 
-    while OAuthCallbackHandler.authorization_code is None and OAuthCallbackHandler.error is None:
-        server.handle_request()
+        code = params['code'][0]
+        print('\nAuthorization code extracted!')
+    else:
+        # Callback server mode
+        print(f'\nStarting callback server on {REDIRECT_URI}...')
+        server = HTTPServer((REDIRECT_HOST, REDIRECT_PORT), OAuthCallbackHandler)
+        server.timeout = 300  # 5 minute timeout
 
-    server.server_close()
+        # Open browser
+        print('\nOpening browser for Google authorization...')
+        print(f'If browser does not open, visit:\n{auth_url}\n')
+        webbrowser.open(auth_url)
 
-    if OAuthCallbackHandler.error:
-        print(f'\nAuthorization failed: {OAuthCallbackHandler.error}')
-        return False
+        print('Waiting for authorization...')
 
-    code = OAuthCallbackHandler.authorization_code
-    print('\nAuthorization code received!')
+        # Wait for callback
+        OAuthCallbackHandler.authorization_code = None
+        OAuthCallbackHandler.error = None
+
+        while OAuthCallbackHandler.authorization_code is None and OAuthCallbackHandler.error is None:
+            server.handle_request()
+
+        server.server_close()
+
+        if OAuthCallbackHandler.error:
+            print(f'\nAuthorization failed: {OAuthCallbackHandler.error}')
+            return False
+
+        code = OAuthCallbackHandler.authorization_code
+        print('\nAuthorization code received!')
 
     # Exchange code for tokens
     print('Exchanging code for tokens...')
@@ -316,6 +342,11 @@ To get client_secret.json:
         action='store_true',
         help='Verify existing tokens without re-authorizing',
     )
+    parser.add_argument(
+        '--manual',
+        action='store_true',
+        help='Manual mode: paste the redirect URL instead of using callback server (use when running on remote machine like Home Assistant)',
+    )
 
     args = parser.parse_args()
 
@@ -332,7 +363,7 @@ To get client_secret.json:
         print(f'Error: File not found: {args.credentials}')
         sys.exit(1)
 
-    success = run_oauth_flow(args.credentials)
+    success = run_oauth_flow(args.credentials, manual=args.manual)
     sys.exit(0 if success else 1)
 
 
