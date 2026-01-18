@@ -31,8 +31,8 @@ def set_state(entity_id: str, value: Any, attributes: dict = None) -> None:
     if attributes is None:
         attributes = {}
 
-    # pyscript provides state.set globally
-    state.set(entity_id, value, attributes)
+    # pyscript provides state.set globally with keyword argument
+    state.set(entity_id, value, new_attributes=attributes)
 
 
 def update_pending_bills(bills: list[dict]) -> None:
