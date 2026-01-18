@@ -11,6 +11,8 @@ from .entities import (
     update_wise_balance,
     update_payment_history,
     update_google_auth_status,
+    update_awaiting_2fa,
+    update_last_poll,
     update_statistics,
     get_entity_states,
 )
@@ -21,6 +23,8 @@ __all__ = [
     'update_wise_balance',
     'update_payment_history',
     'update_google_auth_status',
+    'update_awaiting_2fa',
+    'update_last_poll',
     'update_statistics',
     'get_entity_states',
 ]
