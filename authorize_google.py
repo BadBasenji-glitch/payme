@@ -30,9 +30,9 @@ from http_client import post_json, HttpError
 GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 
-# Scopes for read-only Photos access
+# Scopes for read-only Drive access
 SCOPES = [
-    'https://www.googleapis.com/auth/photoslibrary.readonly',
+    'https://www.googleapis.com/auth/drive.readonly',
 ]
 
 # Local callback server

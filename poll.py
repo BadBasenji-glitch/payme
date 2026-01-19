@@ -26,7 +26,7 @@ from iban import validate_iban, get_iban_info
 from dedup import is_duplicate, record_payment, check_similar
 from girocode import extract_girocode, extract_girocode_from_bytes, check_dependencies as girocode_available
 from gemini import parse_bill_image, parse_bill_images, parse_bill_bytes, ParsedBill
-from google_photos import (
+from google_drive import (
     get_new_photos,
     group_photos_by_time,
     download_photo,
