@@ -256,6 +256,7 @@ def create_transfer(
     quote_id: str,
     recipient_id: int,
     reference: str,
+    profile_id: str = None,
 ) -> dict:
     """
     Create a transfer.
@@ -263,6 +264,9 @@ def create_transfer(
     Returns transfer dict with id, status.
     Note: Transfer is not funded yet - call fund_transfer() to execute.
     """
+    if profile_id is None:
+        profile_id = get_profile_id()
+
     data = {
         'targetAccount': recipient_id,
         'quoteUuid': quote_id,
@@ -272,7 +276,7 @@ def create_transfer(
         },
     }
 
-    return api_post('/v1/transfers', data)
+    return api_post(f'/v1/profiles/{profile_id}/transfers', data)
 
 
 def fund_transfer(transfer_id: int, profile_id: str = None) -> dict:
