@@ -26,6 +26,8 @@ class PaymeCard extends HTMLElement {
 
   _handleClick(e) {
     const target = e.target;
+    console.log('Click target:', target.tagName, target.className);
+    console.log('Selected bill:', this._selectedBill ? this._selectedBill.id : 'none');
 
     // Handle table row clicks
     const row = target.closest('.bill-row');
