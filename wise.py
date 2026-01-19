@@ -2,6 +2,7 @@
 """Wise API client for payme."""
 
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
@@ -265,7 +266,7 @@ def create_transfer(
     data = {
         'targetAccount': recipient_id,
         'quoteUuid': quote_id,
-        'customerTransactionId': None,  # Will be auto-generated
+        'customerTransactionId': str(uuid.uuid4()),
         'details': {
             'reference': reference[:140] if reference else '',  # Max 140 chars
         },
