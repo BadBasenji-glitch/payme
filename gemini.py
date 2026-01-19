@@ -12,7 +12,7 @@ from config import GEMINI_API_BASE, CONFIDENCE_THRESHOLD, get_env
 from http_client import post_json, HttpError
 
 # Gemini model for vision tasks
-GEMINI_MODEL = 'gemini-1.5-flash'
+GEMINI_MODEL = 'gemini-2.0-flash'
 
 # Prompt for bill parsing
 BILL_PARSE_PROMPT = '''Analyze this bill/invoice image and extract the payment details.

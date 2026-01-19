@@ -31,7 +31,7 @@ CONFIDENCE_THRESHOLD = 0.9
 
 # API endpoints
 WISE_API_BASE = 'https://api.wise.com'
-GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1'
+GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 GOOGLE_PHOTOS_API_BASE = 'https://photoslibrary.googleapis.com/v1'
 OPENIBAN_API_BASE = 'https://openiban.com/validate'
 BUNDESBANK_BLZ_URL = 'https://www.bundesbank.de/resource/blob/602848/bba34a4e629304a37cf9a553c47af782/mL/blz-2024-06-03-txt-data.txt'
