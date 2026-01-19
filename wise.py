@@ -179,7 +179,7 @@ def create_quote(
         'profile': int(profile_id),
     }
 
-    return api_post('/v3/quotes', data)
+    return api_post(f'/v3/profiles/{profile_id}/quotes', data)
 
 
 def create_recipient(
@@ -276,7 +276,7 @@ def create_transfer(
         },
     }
 
-    return api_post(f'/v1/profiles/{profile_id}/transfers', data)
+    return api_post('/v1/transfers', data)
 
 
 def fund_transfer(transfer_id: int, profile_id: str = None) -> dict:
