@@ -13,6 +13,7 @@ import json
 import subprocess
 import os
 from datetime import datetime
+from pathlib import Path
 
 # Path to payme scripts
 SCRIPTS_PATH = '/config/scripts/payme'
@@ -151,11 +152,10 @@ def update_entities_from_status():
             }
         )
 
-    # Load and update payment history from file
+    # Load and update payment history from file (using pathlib for pyscript compatibility)
     try:
-        history_file = '/config/.storage/payme/payment_history.json'
-        with open(history_file, 'r') as f:
-            history_data = json.load(f)
+        history_file = Path('/config/.storage/payme/payment_history.json')
+        history_data = json.loads(history_file.read_text())
         history = history_data.get('history', [])
         state.set(
             'sensor.payme_payment_history',
