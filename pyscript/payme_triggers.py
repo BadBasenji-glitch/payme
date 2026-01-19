@@ -19,12 +19,23 @@ from pathlib import Path
 SCRIPTS_PATH = '/config/scripts/payme'
 
 
-def get_script_env():
-    """Get environment variables for scripts. Env vars already set in HA."""
-    return dict(os.environ)
+def get_script_env(app_config=None):
+    """Get environment variables for scripts, including secrets from app_config."""
+    env = dict(os.environ)
+
+    # Add secrets from pyscript.app_config if provided
+    if app_config:
+        if app_config.get('gemini_api_key'):
+            env['PAYME_GEMINI_API_KEY'] = app_config['gemini_api_key']
+        if app_config.get('wise_api_token'):
+            env['PAYME_WISE_API_TOKEN'] = app_config['wise_api_token']
+        if app_config.get('wise_profile_id'):
+            env['PAYME_WISE_PROFILE_ID'] = str(app_config['wise_profile_id'])
+
+    return env
 
 
-def run_script(command: str, *args) -> dict:
+def run_script(command: str, *args, app_config=None) -> dict:
     """
     Run a payme script command.
 
@@ -38,7 +49,7 @@ def run_script(command: str, *args) -> dict:
             capture_output=True,
             text=True,
             timeout=120,
-            env=get_script_env(),
+            env=get_script_env(app_config),
             cwd=SCRIPTS_PATH,
         )
 
@@ -70,11 +81,11 @@ def run_script(command: str, *args) -> dict:
         }
 
 
-def update_entities_from_status():
+def update_entities_from_status(app_config=None):
     """Fetch status and update all entities directly using state.set."""
     log.info('payme: update_entities_from_status called')
 
-    result = run_script('status')
+    result = run_script('status', app_config=app_config)
     log.info(f'payme: run_script result - success: {result.get("success")}, has_data: {result.get("data") is not None}')
 
     if not result['success']:
@@ -185,7 +196,7 @@ def payme_scheduled_poll():
 
     from payme import update_last_poll
 
-    result = run_script('poll')
+    result = run_script('poll', app_config=pyscript.app_config)
 
     if result['success']:
         data = result.get('data', {})
@@ -204,7 +215,7 @@ def payme_scheduled_poll():
         log.error(f"payme: Poll failed - {result.get('error')}")
 
     # Update all entities
-    update_entities_from_status()
+    update_entities_from_status(app_config=pyscript.app_config)
 
 
 @time_trigger('cron(0 6 * * *)')
@@ -213,12 +224,12 @@ def payme_daily_maintenance():
     log.info('payme: Running daily maintenance')
 
     # Update entities
-    update_entities_from_status()
+    update_entities_from_status(app_config=pyscript.app_config)
 
     # Check Google auth
     from payme import update_google_auth_status
 
-    result = run_script('status')
+    result = run_script('status', app_config=pyscript.app_config)
     if result['success'] and result['data']:
         auth = result['data'].get('auth_status', {})
         if auth.get('status') in ('expiring', 'expired'):
@@ -252,14 +263,15 @@ def payme_approve(bill_id: str):
     """
     log.info(f'payme: Approving bill {bill_id}')
 
-    result = run_script('approve', bill_id)
+    result = run_script('approve', bill_id, app_config=pyscript.app_config)
 
     if result['success']:
         log.info(f'payme: Bill {bill_id} approved')
     else:
         log.error(f"payme: Approve failed - {result.get('error')}")
+        log.error(f"payme: Script output - {result.get('data')}")
 
-    update_entities_from_status()
+    update_entities_from_status(app_config=pyscript.app_config)
 
 
 @service
@@ -274,14 +286,14 @@ def payme_reject(bill_id: str):
     """
     log.info(f'payme: Rejecting bill {bill_id}')
 
-    result = run_script('reject', bill_id)
+    result = run_script('reject', bill_id, app_config=pyscript.app_config)
 
     if result['success']:
         log.info(f'payme: Bill {bill_id} rejected')
     else:
         log.error(f"payme: Reject failed - {result.get('error')}")
 
-    update_entities_from_status()
+    update_entities_from_status(app_config=pyscript.app_config)
 
 
 @service
@@ -296,8 +308,8 @@ def payme_override_duplicate(bill_id: str):
     """
     log.info(f'payme: Overriding duplicate for bill {bill_id}')
 
-    result = run_script('override-duplicate', bill_id)
-    update_entities_from_status()
+    result = run_script('override-duplicate', bill_id, app_config=pyscript.app_config)
+    update_entities_from_status(app_config=pyscript.app_config)
 
 
 @service
@@ -308,7 +320,7 @@ def payme_refresh():
     Call via: service: pyscript.payme_refresh
     """
     log.info('payme: Refreshing entities')
-    update_entities_from_status()
+    update_entities_from_status(app_config=pyscript.app_config)
 
 
 @service
@@ -340,7 +352,7 @@ def payme_test_script():
     """
     log.info('payme: Testing run_script')
 
-    result = run_script('status')
+    result = run_script('status', app_config=pyscript.app_config)
 
     log.info(f'payme: run_script returned success={result.get("success")}')
 
@@ -384,7 +396,7 @@ def payme_get_status():
 
     Logs status to pyscript log.
     """
-    result = run_script('status')
+    result = run_script('status', app_config=pyscript.app_config)
     log.info(f"payme status: {result.get('data', {})}")
 
 
@@ -419,14 +431,14 @@ def payme_set_status(bill_id: str, status: str):
 
     log.info(f'payme: Setting bill {bill_id} status to {status}')
 
-    result = run_script('set-status', bill_id, status)
+    result = run_script('set-status', bill_id, status, app_config=pyscript.app_config)
 
     if result['success']:
         log.info(f'payme: Bill {bill_id} status updated to {status}')
     else:
         log.error(f"payme: Set status failed - {result.get('error')}")
 
-    update_entities_from_status()
+    update_entities_from_status(app_config=pyscript.app_config)
 
 
 # =============================================================================
@@ -465,7 +477,7 @@ def handle_notification_action(**kwargs):
 
     elif action_type == 'VIEW':
         # Trigger a refresh so dashboard shows latest
-        update_entities_from_status()
+        update_entities_from_status(app_config=pyscript.app_config)
 
 
 @event_trigger('ios.notification_action_fired')
@@ -502,6 +514,6 @@ def payme_startup():
 
     # Fetch actual status
     task.sleep(5)  # Wait for HA to be fully ready
-    update_entities_from_status()
+    update_entities_from_status(app_config=pyscript.app_config)
 
     log.info('payme: Startup complete')
