@@ -207,12 +207,12 @@ def call_gemini_api(request_body: dict, api_key: str) -> str:
 
     Raises HttpError on API failure.
     """
-    url = f'{GEMINI_API_BASE}/models/{GEMINI_MODEL}:generateContent'
+    url = f'{GEMINI_API_BASE}/models/{GEMINI_MODEL}:generateContent?key={api_key}'
 
     response = post_json(
         url,
         headers={'Content-Type': 'application/json'},
-        json={**request_body, 'key': api_key},
+        json=request_body,
         timeout=60,  # Longer timeout for vision tasks
     )
 
