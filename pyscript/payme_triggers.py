@@ -320,6 +320,26 @@ def payme_refresh():
 
 
 @service
+def payme_test_state():
+    """
+    Test service to verify state.set works.
+
+    Call via: service: pyscript.payme_test_state
+    """
+    log.info('payme: Testing state.set')
+    state.set(
+        'sensor.payme_pending_bills',
+        99,
+        new_attributes={
+            'bills': '[{"id":"test","recipient":"STATE.SET WORKS","status":"pending","amount":123}]',
+            'count': 1,
+            'friendly_name': 'Pending Bills',
+        }
+    )
+    log.info('payme: state.set completed')
+
+
+@service
 def payme_get_status():
     """
     Get current payme status as JSON.
