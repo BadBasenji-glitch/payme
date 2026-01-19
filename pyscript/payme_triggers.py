@@ -340,6 +340,50 @@ def payme_test_state():
 
 
 @service
+def payme_test_script():
+    """
+    Test service to verify run_script works.
+
+    Call via: service: pyscript.payme_test_script
+    """
+    log.info('payme: Testing run_script')
+
+    result = run_script('status')
+
+    log.info(f'payme: run_script returned success={result.get("success")}')
+
+    if result['success'] and result['data']:
+        data = result['data']
+        pending = data.get('pending_bills', [])
+        recipient = pending[0].get('recipient', 'NONE') if pending else 'NO_BILLS'
+        log.info(f'payme: got {len(pending)} bills, first: {recipient}')
+
+        state.set(
+            'sensor.payme_pending_bills',
+            len(pending),
+            new_attributes={
+                'bills': json.dumps(pending),
+                'count': len(pending),
+                'friendly_name': 'Pending Bills',
+                'test': 'SCRIPT_WORKS',
+            }
+        )
+        log.info('payme: set entity from script data')
+    else:
+        error = result.get('error', 'unknown')
+        log.error(f'payme: run_script failed: {error}')
+        state.set(
+            'sensor.payme_pending_bills',
+            0,
+            new_attributes={
+                'bills': '[]',
+                'error': f'SCRIPT_FAILED: {error}',
+                'friendly_name': 'Pending Bills',
+            }
+        )
+
+
+@service
 def payme_get_status():
     """
     Get current payme status as JSON.
