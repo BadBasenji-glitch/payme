@@ -1,0 +1,12 @@
+# Core dependencies for payme
+requests>=2.28.0
+
+# Image processing
+Pillow>=9.0.0
+
+# QR code detection (optional, for GiroCode)
+pyzbar>=0.1.9
+
+# Note: pyzbar requires the system zbar library
+# On Alpine/Home Assistant OS: apk add zbar
+# On Debian/Ubuntu: apt install libzbar0
