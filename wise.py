@@ -227,7 +227,7 @@ def find_recipient(iban: str, profile_id: str = None) -> Optional[dict]:
 
     for r in recipients:
         details = r.get('details', {})
-        if details.get('iban', '').replace(' ', '').upper() == iban:
+        if (details.get('iban') or '').replace(' ', '').upper() == iban:
             return r
 
     return None
