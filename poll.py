@@ -550,6 +550,45 @@ def override_duplicate(bill_id: str) -> dict:
     return result
 
 
+def set_transfer_id(bill_id: str, transfer_id: int) -> dict:
+    """
+    Set the Wise transfer ID on a bill.
+
+    Args:
+        bill_id: The bill ID to update
+        transfer_id: The Wise transfer ID
+
+    Returns dict with success status.
+    """
+    result = {
+        'success': False,
+        'error': None,
+        'bill_id': bill_id,
+        'transfer_id': transfer_id,
+    }
+
+    # Check history (bills with transfers are in history)
+    data = load_json(PAYMENT_HISTORY_FILE, {'pending': [], 'history': []})
+
+    for i, entry in enumerate(data.get('history', [])):
+        if entry.get('id') == bill_id:
+            data['history'][i]['transfer_id'] = transfer_id
+            save_json(PAYMENT_HISTORY_FILE, data)
+            result['success'] = True
+            return result
+
+    # Also check pending
+    for i, entry in enumerate(data.get('pending', [])):
+        if entry.get('id') == bill_id:
+            data['pending'][i]['transfer_id'] = transfer_id
+            save_json(PAYMENT_HISTORY_FILE, data)
+            result['success'] = True
+            return result
+
+    result['error'] = f'Bill not found: {bill_id}'
+    return result
+
+
 def set_bill_status(bill_id: str, status: str) -> dict:
     """
     Manually set a bill's status.
@@ -801,6 +840,11 @@ def main():
     # Check transfers command
     subparsers.add_parser('check-transfers', help='Check Wise transfer statuses and update bills')
 
+    # Set transfer ID command
+    set_transfer_parser = subparsers.add_parser('set-transfer-id', help='Set Wise transfer ID on a bill')
+    set_transfer_parser.add_argument('bill_id', help='Bill ID')
+    set_transfer_parser.add_argument('transfer_id', type=int, help='Wise transfer ID')
+
     args = parser.parse_args()
 
     if args.command == 'poll':
@@ -841,6 +885,10 @@ def main():
 
     elif args.command == 'check-transfers':
         result = check_transfer_statuses()
+        print(json.dumps(result, indent=2))
+
+    elif args.command == 'set-transfer-id':
+        result = set_transfer_id(args.bill_id, args.transfer_id)
         print(json.dumps(result, indent=2))
 
     else:

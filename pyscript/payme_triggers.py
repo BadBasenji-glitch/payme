@@ -452,6 +452,27 @@ def payme_set_status(bill_id: str, status: str):
 
 
 @service
+def payme_set_transfer_id(bill_id: str, transfer_id: int):
+    """
+    Set the Wise transfer ID on a bill.
+
+    Call via:
+        service: pyscript.payme_set_transfer_id
+        data:
+            bill_id: "abc123"
+            transfer_id: 1927490231
+    """
+    log.info(f'payme: Setting transfer_id {transfer_id} on bill {bill_id}')
+
+    result = run_script('set-transfer-id', bill_id, str(transfer_id))
+
+    if result['success']:
+        log.info(f'payme: Transfer ID set successfully')
+    else:
+        log.error(f"payme: Set transfer ID failed - {result.get('error')}")
+
+
+@service
 def payme_check_transfers():
     """
     Check Wise transfer statuses and update bills.
