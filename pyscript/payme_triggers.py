@@ -79,29 +79,54 @@ def run_script(command: str, *args) -> dict:
 
 def update_entities_from_status():
     """Fetch status and update all entities."""
-    from payme import update_all_entities, update_last_poll
+    log.info('payme: update_entities_from_status called')
+
+    try:
+        from payme import update_all_entities, update_last_poll
+        log.info('payme: imported update_all_entities successfully')
+    except Exception as e:
+        log.error(f'payme: failed to import from payme module: {e}')
+        return
 
     result = run_script('status')
+    log.info(f'payme: run_script result - success: {result.get("success")}, has_data: {result.get("data") is not None}')
 
-    if result['success'] and result['data']:
-        data = result['data']
+    if not result['success']:
+        log.error(f'payme: run_script failed - {result.get("error")}')
+        return
 
+    if not result['data']:
+        log.error('payme: run_script returned no data')
+        return
+
+    data = result['data']
+    pending_bills = data.get('pending_bills', [])
+    log.info(f'payme: got {len(pending_bills)} pending bills from status')
+
+    if pending_bills:
+        log.info(f'payme: first pending bill: {pending_bills[0].get("recipient", "unknown")}')
+
+    try:
         update_all_entities(
-            pending_bills=data.get('pending_bills', []),
+            pending_bills=pending_bills,
             wise_balance=data.get('balance'),
             awaiting_2fa=data.get('awaiting_2fa', []),
             google_auth=data.get('auth_status'),
         )
+        log.info('payme: update_all_entities completed')
+    except Exception as e:
+        log.error(f'payme: update_all_entities failed: {e}')
 
-        # Load payment history separately (it's in the file)
-        try:
-            import json as json_module
-            history_file = '/config/.storage/payme/payment_history.json'
-            with open(history_file, 'r') as f:
-                history_data = json_module.load(f)
-            update_all_entities(payment_history=history_data.get('history', []))
-        except Exception:
-            pass
+    # Load payment history separately (it's in the file)
+    try:
+        import json as json_module
+        history_file = '/config/.storage/payme/payment_history.json'
+        with open(history_file, 'r') as f:
+            history_data = json_module.load(f)
+        update_all_entities(payment_history=history_data.get('history', []))
+        log.info('payme: updated payment history')
+    except Exception as e:
+        log.error(f'payme: failed to update payment history: {e}')
 
 
 # =============================================================================
