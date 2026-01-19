@@ -19,6 +19,61 @@ class PaymeCard extends HTMLElement {
     this._history = [];
     this._selectedBill = null;
     this._activeTab = 'pending';
+
+    // Use event delegation - single click handler that persists
+    this.shadowRoot.addEventListener('click', (e) => this._handleClick(e));
+  }
+
+  _handleClick(e) {
+    const target = e.target;
+
+    // Handle table row clicks
+    const row = target.closest('.bill-row');
+    if (row) {
+      const billId = row.getAttribute('data-bill-id');
+      if (billId) this._selectBill(billId);
+      return;
+    }
+
+    // Check for button clicks
+    const btn = target.closest('button');
+    if (!btn) {
+      // Also check for mwc-icon-button (refresh)
+      const iconBtn = target.closest('mwc-icon-button');
+      if (iconBtn && iconBtn.classList.contains('refresh-btn')) {
+        this._poll();
+      }
+      return;
+    }
+
+    // Handle approve button
+    if (btn.classList.contains('btn-primary') && this._selectedBill) {
+      e.stopPropagation();
+      console.log('Approve clicked for bill:', this._selectedBill.id);
+      this._approveBill(this._selectedBill.id);
+      return;
+    }
+
+    // Handle reject button
+    if (btn.classList.contains('btn-danger') && this._selectedBill) {
+      e.stopPropagation();
+      console.log('Reject clicked for bill:', this._selectedBill.id);
+      this._rejectBill(this._selectedBill.id);
+      return;
+    }
+
+    // Handle back button
+    if (btn.classList.contains('btn-back')) {
+      this._closeDetail();
+      return;
+    }
+
+    // Handle tab buttons
+    if (btn.classList.contains('tab')) {
+      const tabName = btn.getAttribute('data-tab');
+      if (tabName) this._setActiveTab(tabName);
+      return;
+    }
   }
 
   setConfig(config) {
@@ -252,54 +307,7 @@ class PaymeCard extends HTMLElement {
       </ha-card>
     `;
 
-    // Bind refresh button
-    const refreshBtn = this.shadowRoot.querySelector('.refresh-btn');
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', () => this._poll());
-    }
-
-    // Bind approve/reject buttons (capture ID at binding time, not click time)
-    const approveBtn = this.shadowRoot.querySelector('.btn-primary');
-    if (approveBtn && this._selectedBill) {
-      const billId = this._selectedBill.id;
-      approveBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        console.log('Approve clicked for bill:', billId);
-        this._approveBill(billId);
-      });
-    }
-
-    const rejectBtn = this.shadowRoot.querySelector('.btn-danger');
-    if (rejectBtn && this._selectedBill) {
-      const billId = this._selectedBill.id;
-      rejectBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        console.log('Reject clicked for bill:', billId);
-        this._rejectBill(billId);
-      });
-    }
-
-    // Bind back button
-    const backBtn = this.shadowRoot.querySelector('.btn-back');
-    if (backBtn) {
-      backBtn.addEventListener('click', () => this._closeDetail());
-    }
-
-    // Bind table rows
-    this.shadowRoot.querySelectorAll('.bill-row').forEach(row => {
-      row.addEventListener('click', (e) => {
-        const billId = row.getAttribute('data-bill-id');
-        if (billId) this._selectBill(billId);
-      });
-    });
-
-    // Bind tabs
-    this.shadowRoot.querySelectorAll('.tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        const tabName = tab.getAttribute('data-tab');
-        if (tabName) this._setActiveTab(tabName);
-      });
-    });
+    // Event delegation handles all clicks - see _handleClick()
   }
 
   _renderTable(bills) {
