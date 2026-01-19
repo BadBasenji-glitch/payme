@@ -21,7 +21,7 @@ SCRIPTS_PATH = '/config/scripts/payme'
 
 def get_script_env():
     """Get environment variables for scripts. Env vars already set in HA."""
-    return os.environ
+    return dict(os.environ)
 
 
 def run_script(command: str, *args) -> dict:
@@ -101,7 +101,7 @@ def update_entities_from_status():
         new_attributes={
             'bills': json.dumps(pending),
             'count': len(pending),
-            'total_amount': sum(b.get('amount', 0) for b in pending),
+            'total_amount': sum([b.get('amount', 0) for b in pending]),
             'friendly_name': 'Pending Bills',
             'icon': 'mdi:file-document-multiple',
             'unit_of_measurement': 'bills',
@@ -505,4 +505,3 @@ def payme_startup():
     update_entities_from_status()
 
     log.info('payme: Startup complete')
-# Updated 19 Jan 2026 10:11:05
