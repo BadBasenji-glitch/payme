@@ -19,9 +19,15 @@ class PaymeCard extends HTMLElement {
     this._history = [];
     this._selectedBill = null;
     this._activeTab = 'pending';
+    this._clickHandlerBound = false;
+  }
 
-    // Use event delegation - single click handler that persists
-    this.shadowRoot.addEventListener('click', (e) => this._handleClick(e));
+  connectedCallback() {
+    if (!this._clickHandlerBound) {
+      this.shadowRoot.addEventListener('click', (e) => this._handleClick(e), true);
+      this._clickHandlerBound = true;
+      console.log('PAYME: Click handler attached');
+    }
   }
 
   _handleClick(e) {
