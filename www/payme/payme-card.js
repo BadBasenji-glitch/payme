@@ -258,15 +258,25 @@ class PaymeCard extends HTMLElement {
       refreshBtn.addEventListener('click', () => this._poll());
     }
 
-    // Bind approve/reject buttons
+    // Bind approve/reject buttons (capture ID at binding time, not click time)
     const approveBtn = this.shadowRoot.querySelector('.btn-primary');
     if (approveBtn && this._selectedBill) {
-      approveBtn.addEventListener('click', () => this._approveBill(this._selectedBill.id));
+      const billId = this._selectedBill.id;
+      approveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        console.log('Approve clicked for bill:', billId);
+        this._approveBill(billId);
+      });
     }
 
     const rejectBtn = this.shadowRoot.querySelector('.btn-danger');
     if (rejectBtn && this._selectedBill) {
-      rejectBtn.addEventListener('click', () => this._rejectBill(this._selectedBill.id));
+      const billId = this._selectedBill.id;
+      rejectBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        console.log('Reject clicked for bill:', billId);
+        this._rejectBill(billId);
+      });
     }
 
     // Bind back button
