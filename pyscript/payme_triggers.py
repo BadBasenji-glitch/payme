@@ -17,16 +17,18 @@ from datetime import datetime
 # Path to payme scripts
 SCRIPTS_PATH = '/config/scripts/payme'
 
-# Environment variables for scripts
-SCRIPT_ENV = {
-    **os.environ,
-    'PAYME_GEMINI_API_KEY': pyscript.app_config.get('gemini_api_key', ''),
-    'PAYME_WISE_API_TOKEN': pyscript.app_config.get('wise_api_token', ''),
-    'PAYME_WISE_PROFILE_ID': pyscript.app_config.get('wise_profile_id', ''),
-    'PAYME_ALBUM_NAME': pyscript.app_config.get('album_name', 'bill-pay'),
-    'PAYME_ALBUM_ID': pyscript.app_config.get('album_id', ''),
-    'PAYME_NOTIFY_SERVICE': pyscript.app_config.get('notify_service', 'mobile_app_phone'),
-}
+
+def get_script_env():
+    """Get environment variables for scripts. Must be called inside functions."""
+    return {
+        **os.environ,
+        'PAYME_GEMINI_API_KEY': pyscript.app_config.get('gemini_api_key', ''),
+        'PAYME_WISE_API_TOKEN': pyscript.app_config.get('wise_api_token', ''),
+        'PAYME_WISE_PROFILE_ID': str(pyscript.app_config.get('wise_profile_id', '')),
+        'PAYME_ALBUM_NAME': pyscript.app_config.get('album_name', 'bill-pay'),
+        'PAYME_ALBUM_ID': pyscript.app_config.get('album_id', ''),
+        'PAYME_NOTIFY_SERVICE': pyscript.app_config.get('notify_service', 'mobile_app_phone'),
+    }
 
 
 def run_script(command: str, *args) -> dict:
@@ -43,7 +45,7 @@ def run_script(command: str, *args) -> dict:
             capture_output=True,
             text=True,
             timeout=120,
-            env=SCRIPT_ENV,
+            env=get_script_env(),
             cwd=SCRIPTS_PATH,
         )
 
