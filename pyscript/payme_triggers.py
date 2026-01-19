@@ -188,7 +188,6 @@ def payme_approve(bill_id: str):
         log.error(f"payme: Approve failed - {result.get('error')}")
 
     update_entities_from_status()
-    return result
 
 
 @service
@@ -211,7 +210,6 @@ def payme_reject(bill_id: str):
         log.error(f"payme: Reject failed - {result.get('error')}")
 
     update_entities_from_status()
-    return result
 
 
 @service
@@ -228,7 +226,6 @@ def payme_override_duplicate(bill_id: str):
 
     result = run_script('override-duplicate', bill_id)
     update_entities_from_status()
-    return result
 
 
 @service
@@ -249,10 +246,10 @@ def payme_get_status():
 
     Call via: service: pyscript.payme_get_status
 
-    Returns status dict in service response.
+    Logs status to pyscript log.
     """
     result = run_script('status')
-    return result.get('data', {})
+    log.info(f"payme status: {result.get('data', {})}")
 
 
 @service
@@ -282,7 +279,7 @@ def payme_set_status(bill_id: str, status: str):
 
     if status not in valid_statuses:
         log.error(f'payme: Invalid status "{status}". Valid: {valid_statuses}')
-        return {'success': False, 'error': f'Invalid status: {status}'}
+        return
 
     log.info(f'payme: Setting bill {bill_id} status to {status}')
 
@@ -294,7 +291,6 @@ def payme_set_status(bill_id: str, status: str):
         log.error(f"payme: Set status failed - {result.get('error')}")
 
     update_entities_from_status()
-    return result
 
 
 # =============================================================================
