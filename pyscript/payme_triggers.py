@@ -451,6 +451,46 @@ def payme_set_status(bill_id: str, status: str):
     update_entities_from_status()
 
 
+@service
+def payme_check_transfers():
+    """
+    Check Wise transfer statuses and update bills.
+
+    Call via: service: pyscript.payme_check_transfers
+
+    Checks bills in 'awaiting_funding', 'awaiting_2fa', or 'processing' status
+    and updates them based on Wise transfer status.
+    """
+    log.info('payme: Checking transfer statuses')
+
+    result = run_script('check-transfers')
+
+    if result['success']:
+        data = result.get('data', {})
+        checked = data.get('checked', 0)
+        updated = data.get('updated', 0)
+        log.info(f'payme: Checked {checked} transfers, updated {updated}')
+
+        if updated > 0:
+            for bill in data.get('bills', []):
+                log.info(f"payme: Bill {bill.get('id')} {bill.get('old_status')} -> {bill.get('new_status')}")
+    else:
+        log.error(f"payme: Check transfers failed - {result.get('error')}")
+
+    update_entities_from_status()
+
+
+# =============================================================================
+# Scheduled Transfer Status Check
+# =============================================================================
+
+@time_trigger('cron(*/10 * * * *)')
+def payme_scheduled_transfer_check():
+    """Check Wise transfer statuses every 10 minutes."""
+    log.info('payme: Running scheduled transfer status check')
+    payme_check_transfers()
+
+
 # =============================================================================
 # Event Handlers
 # =============================================================================

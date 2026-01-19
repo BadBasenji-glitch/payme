@@ -80,6 +80,7 @@ class Bill:
     duplicate_warning: bool = False
     low_confidence: bool = False
     error: str = ''
+    transfer_id: Optional[int] = None  # Wise transfer ID for tracking
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -638,6 +639,91 @@ def check_2fa_transfers() -> list[dict]:
         return []
 
 
+def check_transfer_statuses() -> dict:
+    """
+    Check Wise transfer statuses and update bill statuses accordingly.
+
+    Looks for bills in history with transfer_id that are in
+    'awaiting_funding', 'awaiting_2fa', or 'processing' status,
+    then checks Wise API for current transfer status and updates.
+
+    Returns dict with updated bills and any errors.
+    """
+    result = {
+        'checked': 0,
+        'updated': 0,
+        'bills': [],
+        'errors': [],
+    }
+
+    # Load history
+    data = load_json(PAYMENT_HISTORY_FILE, {'pending': [], 'history': []})
+    history = data.get('history', [])
+
+    # Status mapping from Wise to our statuses
+    # Wise statuses: incoming_payment_waiting, processing, waiting_for_authorization,
+    #                outgoing_payment_sent, funds_converted, cancelled, funds_refunded, bounced_back
+    status_map = {
+        'outgoing_payment_sent': 'paid',
+        'funds_converted': 'paid',
+        'waiting_for_authorization': 'awaiting_2fa',
+        'cancelled': 'failed',
+        'funds_refunded': 'failed',
+        'bounced_back': 'failed',
+        'incoming_payment_waiting': 'awaiting_funding',
+        'processing': 'processing',
+    }
+
+    modified = False
+
+    for i, bill in enumerate(history):
+        transfer_id = bill.get('transfer_id')
+        current_status = bill.get('status', '')
+
+        # Only check bills with transfer_id that are in transitional states
+        if not transfer_id:
+            continue
+        if current_status not in ('awaiting_funding', 'awaiting_2fa', 'processing'):
+            continue
+
+        result['checked'] += 1
+
+        try:
+            # Get transfer status from Wise
+            transfer = get_transfer(transfer_id)
+            wise_status = transfer.status
+            new_status = status_map.get(wise_status, current_status)
+
+            if new_status != current_status:
+                history[i]['status'] = new_status
+
+                # Set paid_at if now paid
+                if new_status == 'paid' and not bill.get('paid_at'):
+                    history[i]['paid_at'] = datetime.now().isoformat()
+
+                result['updated'] += 1
+                result['bills'].append({
+                    'id': bill.get('id'),
+                    'recipient': bill.get('recipient'),
+                    'old_status': current_status,
+                    'new_status': new_status,
+                    'wise_status': wise_status,
+                })
+                modified = True
+
+        except HttpError as e:
+            result['errors'].append(f"Failed to check transfer {transfer_id}: {str(e)}")
+        except Exception as e:
+            result['errors'].append(f"Error checking transfer {transfer_id}: {str(e)}")
+
+    # Save if modified
+    if modified:
+        data['history'] = history
+        save_json(PAYMENT_HISTORY_FILE, data)
+
+    return result
+
+
 def get_status() -> dict:
     """
     Get current payme status.
@@ -712,6 +798,9 @@ def main():
     # List pending command
     subparsers.add_parser('list', help='List pending bills')
 
+    # Check transfers command
+    subparsers.add_parser('check-transfers', help='Check Wise transfer statuses and update bills')
+
     args = parser.parse_args()
 
     if args.command == 'poll':
@@ -749,6 +838,10 @@ def main():
             print()
         if not bills:
             print('No pending bills')
+
+    elif args.command == 'check-transfers':
+        result = check_transfer_statuses()
+        print(json.dumps(result, indent=2))
 
     else:
         parser.print_help()
