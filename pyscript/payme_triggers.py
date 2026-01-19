@@ -78,15 +78,8 @@ def run_script(command: str, *args) -> dict:
 
 
 def update_entities_from_status():
-    """Fetch status and update all entities."""
+    """Fetch status and update all entities directly using state.set."""
     log.info('payme: update_entities_from_status called')
-
-    try:
-        from payme import update_all_entities, update_last_poll
-        log.info('payme: imported update_all_entities successfully')
-    except Exception as e:
-        log.error(f'payme: failed to import from payme module: {e}')
-        return
 
     result = run_script('status')
     log.info(f'payme: run_script result - success: {result.get("success")}, has_data: {result.get("data") is not None}')
@@ -100,33 +93,93 @@ def update_entities_from_status():
         return
 
     data = result['data']
+
+    # Update pending bills entity directly
     pending_bills = data.get('pending_bills', [])
-    log.info(f'payme: got {len(pending_bills)} pending bills from status')
-
+    log.info(f'payme: got {len(pending_bills)} pending bills')
     if pending_bills:
-        log.info(f'payme: first pending bill: {pending_bills[0].get("recipient", "unknown")}')
+        log.info(f'payme: first bill: {pending_bills[0].get("recipient", "unknown")}')
 
-    try:
-        update_all_entities(
-            pending_bills=pending_bills,
-            wise_balance=data.get('balance'),
-            awaiting_2fa=data.get('awaiting_2fa', []),
-            google_auth=data.get('auth_status'),
+    # Filter by status
+    pending = [b for b in pending_bills if b.get('status') == 'pending']
+    state.set(
+        'sensor.payme_pending_bills',
+        len(pending),
+        new_attributes={
+            'bills': json.dumps(pending),
+            'count': len(pending),
+            'total_amount': sum(b.get('amount', 0) for b in pending),
+            'friendly_name': 'Pending Bills',
+            'icon': 'mdi:file-document-multiple',
+            'unit_of_measurement': 'bills',
+        }
+    )
+    log.info(f'payme: set pending_bills entity to {len(pending)} bills')
+
+    # Update Wise balance
+    balance = data.get('balance', 0)
+    if balance is not None:
+        state.set(
+            'sensor.payme_wise_balance',
+            round(balance, 2),
+            new_attributes={
+                'currency': 'EUR',
+                'friendly_name': 'Wise Balance',
+                'icon': 'mdi:cash',
+                'unit_of_measurement': 'EUR',
+                'device_class': 'monetary',
+            }
         )
-        log.info('payme: update_all_entities completed')
-    except Exception as e:
-        log.error(f'payme: update_all_entities failed: {e}')
+        log.info(f'payme: set balance to {balance}')
 
-    # Load payment history separately (it's in the file)
+    # Update awaiting 2FA
+    awaiting_2fa = data.get('awaiting_2fa', [])
+    state.set(
+        'sensor.payme_awaiting_wise_2fa',
+        len(awaiting_2fa),
+        new_attributes={
+            'transfers': json.dumps(awaiting_2fa),
+            'count': len(awaiting_2fa),
+            'friendly_name': 'Awaiting Wise 2FA',
+            'icon': 'mdi:two-factor-authentication',
+        }
+    )
+
+    # Update Google auth status
+    auth = data.get('auth_status', {})
+    if auth:
+        state.set(
+            'sensor.payme_google_auth_status',
+            auth.get('status', 'unknown'),
+            new_attributes={
+                'expires_at': auth.get('expires_at', ''),
+                'message': auth.get('message', ''),
+                'friendly_name': 'Google Auth Status',
+                'icon': 'mdi:google',
+            }
+        )
+
+    # Load and update payment history from file
     try:
-        import json as json_module
         history_file = '/config/.storage/payme/payment_history.json'
         with open(history_file, 'r') as f:
-            history_data = json_module.load(f)
-        update_all_entities(payment_history=history_data.get('history', []))
-        log.info('payme: updated payment history')
+            history_data = json.load(f)
+        history = history_data.get('history', [])
+        state.set(
+            'sensor.payme_payment_history',
+            len(history),
+            new_attributes={
+                'history': json.dumps(history),
+                'total_count': len(history),
+                'friendly_name': 'Payment History',
+                'icon': 'mdi:history',
+            }
+        )
+        log.info(f'payme: set payment history to {len(history)} items')
     except Exception as e:
-        log.error(f'payme: failed to update payment history: {e}')
+        log.error(f'payme: failed to load payment history: {e}')
+
+    log.info('payme: entity update complete')
 
 
 # =============================================================================
