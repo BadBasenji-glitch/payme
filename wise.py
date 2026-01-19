@@ -423,17 +423,12 @@ def execute_payment(
 
         result['transfer_id'] = transfer_id
 
-        # Fund transfer
-        funding = fund_transfer(transfer_id, profile_id)
-        result['status'] = funding.get('status', 'unknown')
-        result['success'] = result['status'] not in ('REJECTED', 'FAILED')
-
-        # Check if needs 2FA
-        if result['status'] == 'PENDING' or 'waiting' in result['status'].lower():
-            current = get_transfer_status(transfer_id)
-            result['status'] = current
-            if current == 'waiting_for_authorization':
-                result['needs_2fa'] = True
+        # Note: Personal Wise accounts cannot fund transfers via API (PSD2 restriction)
+        # The transfer is created as a draft - user must fund via Wise app/website
+        result['status'] = 'awaiting_funding'
+        result['success'] = True
+        result['wise_url'] = f'https://wise.com/transactions/activities/by-resource/TRANSFER/{transfer_id}'
+        result['message'] = 'Transfer created. Please fund it in the Wise app or website.'
 
         return result
 

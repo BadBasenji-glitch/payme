@@ -46,6 +46,7 @@ from notify import (
     notify_payment_rejected,
     notify_insufficient_balance,
     notify_2fa_required,
+    notify_awaiting_funding,
     notify_parse_error,
     notify_google_auth_expiring,
     notify_poll_complete,
@@ -440,15 +441,23 @@ def approve_bill(bill_id: str) -> dict:
         # Record for deduplication
         record_payment(bill.iban, bill.amount, bill.reference)
 
-        # Update bill status
-        bill.status = 'paid'
-        bill.paid_at = datetime.now().isoformat()
         result['success'] = True
         result['transfer_id'] = payment_result.get('transfer_id')
         result['status'] = payment_result.get('status')
 
-        # Check if needs 2FA
-        if payment_result.get('needs_2fa'):
+        # Check status type
+        if payment_result.get('status') == 'awaiting_funding':
+            # Personal Wise accounts can't fund via API - user must fund in app
+            bill.status = 'awaiting_funding'
+            bill.transfer_id = payment_result.get('transfer_id')
+            notify_awaiting_funding(
+                transfer_id=payment_result['transfer_id'],
+                recipient=bill.recipient,
+                amount=bill.amount,
+                currency=bill.currency,
+                reference=bill.reference,
+            )
+        elif payment_result.get('needs_2fa'):
             bill.status = 'awaiting_2fa'
             notify_2fa_required(
                 transfer_id=payment_result['transfer_id'],
@@ -457,6 +466,8 @@ def approve_bill(bill_id: str) -> dict:
                 currency=bill.currency,
             )
         else:
+            bill.status = 'paid'
+            bill.paid_at = datetime.now().isoformat()
             notify_payment_sent(
                 recipient=bill.recipient,
                 amount=bill.amount,

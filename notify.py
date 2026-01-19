@@ -294,6 +294,46 @@ def notify_2fa_required(
     return send_notification(title, message, data)
 
 
+def notify_awaiting_funding(
+    transfer_id: int,
+    recipient: str,
+    amount: float,
+    currency: str = 'EUR',
+    reference: str = '',
+) -> bool:
+    """Send notification that transfer needs funding in Wise app."""
+    title = '💳 Fund Transfer in Wise'
+    message = (
+        f'{format_currency(amount, currency)} to {recipient}\n'
+        f'Ref: {reference[:50]}\n'
+        f'Transfer created - tap to fund in Wise app'
+    )
+
+    data = {
+        'tag': f'payme_fund_{transfer_id}',
+        'group': 'payme_funding',
+        'importance': 'high',
+        'actions': [
+            {
+                'action': 'URI',
+                'title': 'Open Wise',
+                'uri': 'wise://',
+            },
+        ],
+    }
+
+    # Also create persistent notification
+    send_persistent_notification(
+        title,
+        f'{format_currency(amount, currency)} to {recipient}\n'
+        f'Reference: {reference}\n'
+        f'Open Wise app to fund transfer #{transfer_id}',
+        notification_id=f'payme_fund_{transfer_id}',
+    )
+
+    return send_notification(title, message, data)
+
+
 def notify_parse_error(
     filename: str,
     error: str,
