@@ -70,7 +70,7 @@ class PaymeCard extends HTMLElement {
       case 'pending':
         return allBills.filter(b => b.status === 'pending');
       case 'processing':
-        return allBills.filter(b => ['awaiting_2fa', 'processing', 'insufficient_balance'].includes(b.status));
+        return allBills.filter(b => ['awaiting_2fa', 'awaiting_funding', 'processing', 'insufficient_balance'].includes(b.status));
       case 'complete':
         return allBills.filter(b => ['paid', 'rejected', 'failed'].includes(b.status));
       case 'all':
@@ -106,6 +106,7 @@ class PaymeCard extends HTMLElement {
     const statusConfig = {
       'pending': { label: 'Pending', class: 'status-pending' },
       'awaiting_2fa': { label: 'Awaiting 2FA', class: 'status-processing' },
+      'awaiting_funding': { label: 'Fund in Wise', class: 'status-processing' },
       'processing': { label: 'Processing', class: 'status-processing' },
       'insufficient_balance': { label: 'Needs Funding', class: 'status-warning' },
       'paid': { label: 'Paid', class: 'status-paid' },
@@ -207,7 +208,7 @@ class PaymeCard extends HTMLElement {
   _render() {
     const bills = this._getFilteredBills();
     const pendingCount = [...this._bills, ...this._history].filter(b => b.status === 'pending').length;
-    const processingCount = [...this._bills, ...this._history].filter(b => ['awaiting_2fa', 'processing', 'insufficient_balance'].includes(b.status)).length;
+    const processingCount = [...this._bills, ...this._history].filter(b => ['awaiting_2fa', 'awaiting_funding', 'processing', 'insufficient_balance'].includes(b.status)).length;
     const completeCount = [...this._bills, ...this._history].filter(b => ['paid', 'rejected', 'failed'].includes(b.status)).length;
     const allCount = [...this._bills, ...this._history].length;
 
@@ -231,20 +232,16 @@ class PaymeCard extends HTMLElement {
         </div>
 
         <div class="tabs">
-          <button class="tab ${this._activeTab === 'pending' ? 'active' : ''}"
-                  onclick="this.getRootNode().host._setActiveTab('pending')">
+          <button class="tab ${this._activeTab === 'pending' ? 'active' : ''}" data-tab="pending">
             Pending <span class="badge">${pendingCount}</span>
           </button>
-          <button class="tab ${this._activeTab === 'processing' ? 'active' : ''}"
-                  onclick="this.getRootNode().host._setActiveTab('processing')">
+          <button class="tab ${this._activeTab === 'processing' ? 'active' : ''}" data-tab="processing">
             Processing <span class="badge">${processingCount}</span>
           </button>
-          <button class="tab ${this._activeTab === 'complete' ? 'active' : ''}"
-                  onclick="this.getRootNode().host._setActiveTab('complete')">
+          <button class="tab ${this._activeTab === 'complete' ? 'active' : ''}" data-tab="complete">
             Complete <span class="badge">${completeCount}</span>
           </button>
-          <button class="tab ${this._activeTab === 'all' ? 'active' : ''}"
-                  onclick="this.getRootNode().host._setActiveTab('all')">
+          <button class="tab ${this._activeTab === 'all' ? 'active' : ''}" data-tab="all">
             All <span class="badge">${allCount}</span>
           </button>
         </div>
@@ -260,6 +257,39 @@ class PaymeCard extends HTMLElement {
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => this._poll());
     }
+
+    // Bind approve/reject buttons
+    const approveBtn = this.shadowRoot.querySelector('.btn-primary');
+    if (approveBtn && this._selectedBill) {
+      approveBtn.addEventListener('click', () => this._approveBill(this._selectedBill.id));
+    }
+
+    const rejectBtn = this.shadowRoot.querySelector('.btn-danger');
+    if (rejectBtn && this._selectedBill) {
+      rejectBtn.addEventListener('click', () => this._rejectBill(this._selectedBill.id));
+    }
+
+    // Bind back button
+    const backBtn = this.shadowRoot.querySelector('.btn-back');
+    if (backBtn) {
+      backBtn.addEventListener('click', () => this._closeDetail());
+    }
+
+    // Bind table rows
+    this.shadowRoot.querySelectorAll('.bill-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        const billId = row.getAttribute('data-bill-id');
+        if (billId) this._selectBill(billId);
+      });
+    });
+
+    // Bind tabs
+    this.shadowRoot.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabName = tab.getAttribute('data-tab');
+        if (tabName) this._setActiveTab(tabName);
+      });
+    });
   }
 
   _renderTable(bills) {
@@ -287,7 +317,7 @@ class PaymeCard extends HTMLElement {
           <tbody>
             ${bills.map(bill => `
               <tr class="bill-row ${bill.duplicate_warning ? 'warning' : ''} ${bill.low_confidence ? 'low-confidence' : ''}"
-                  onclick="this.getRootNode().host._selectBill('${bill.id}')">
+                  data-bill-id="${bill.id}">
                 <td class="date-cell">${this._formatDate(bill.due_date)}</td>
                 <td>
                   <div class="vendor-cell">
@@ -315,7 +345,7 @@ class PaymeCard extends HTMLElement {
     return `
       <div class="bill-detail">
         <div class="detail-header">
-          <button class="btn-back" onclick="this.getRootNode().host._closeDetail()">
+          <button class="btn-back">
             <ha-icon icon="mdi:arrow-left"></ha-icon> Back
           </button>
         </div>
@@ -331,10 +361,10 @@ class PaymeCard extends HTMLElement {
 
         ${isPending ? `
           <div class="action-buttons">
-            <button class="btn btn-primary" onclick="this.getRootNode().host._approveBill('${bill.id}')">
+            <button class="btn btn-primary">
               <ha-icon icon="mdi:check"></ha-icon> Approve
             </button>
-            <button class="btn btn-danger" onclick="this.getRootNode().host._rejectBill('${bill.id}')">
+            <button class="btn btn-danger">
               <ha-icon icon="mdi:close"></ha-icon> Reject
             </button>
           </div>
