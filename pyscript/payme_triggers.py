@@ -19,23 +19,33 @@ from pathlib import Path
 SCRIPTS_PATH = '/config/scripts/payme'
 
 
-def get_script_env(app_config=None):
-    """Get environment variables for scripts, including secrets from app_config."""
+def get_script_env():
+    """Get environment variables for scripts, including secrets."""
     env = dict(os.environ)
 
-    # Add secrets from pyscript.app_config if provided
-    if app_config:
-        if app_config.get('gemini_api_key'):
-            env['PAYME_GEMINI_API_KEY'] = app_config['gemini_api_key']
-        if app_config.get('wise_api_token'):
-            env['PAYME_WISE_API_TOKEN'] = app_config['wise_api_token']
-        if app_config.get('wise_profile_id'):
-            env['PAYME_WISE_PROFILE_ID'] = str(app_config['wise_profile_id'])
+    # Read secrets directly from secrets.yaml
+    secrets_path = Path('/config/secrets.yaml')
+    if secrets_path.exists():
+        try:
+            content = secrets_path.read_text()
+            for line in content.split('\n'):
+                line = line.strip()
+                if line.startswith('payme_gemini_api_key:'):
+                    val = line.split(':', 1)[1].strip().strip('"').strip("'")
+                    env['PAYME_GEMINI_API_KEY'] = val
+                elif line.startswith('payme_wise_api_token:'):
+                    val = line.split(':', 1)[1].strip().strip('"').strip("'")
+                    env['PAYME_WISE_API_TOKEN'] = val
+                elif line.startswith('payme_wise_profile_id:'):
+                    val = line.split(':', 1)[1].strip().strip('"').strip("'")
+                    env['PAYME_WISE_PROFILE_ID'] = val
+        except Exception as e:
+            log.error(f'payme: Failed to read secrets: {e}')
 
     return env
 
 
-def run_script(command: str, *args, app_config=None) -> dict:
+def run_script(command: str, *args) -> dict:
     """
     Run a payme script command.
 
@@ -49,7 +59,7 @@ def run_script(command: str, *args, app_config=None) -> dict:
             capture_output=True,
             text=True,
             timeout=120,
-            env=get_script_env(app_config),
+            env=get_script_env(),
             cwd=SCRIPTS_PATH,
         )
 
@@ -81,11 +91,11 @@ def run_script(command: str, *args, app_config=None) -> dict:
         }
 
 
-def update_entities_from_status(app_config=None):
+def update_entities_from_status():
     """Fetch status and update all entities directly using state.set."""
     log.info('payme: update_entities_from_status called')
 
-    result = run_script('status', app_config=app_config)
+    result = run_script('status')
     log.info(f'payme: run_script result - success: {result.get("success")}, has_data: {result.get("data") is not None}')
 
     if not result['success']:
@@ -196,7 +206,7 @@ def payme_scheduled_poll():
 
     from payme import update_last_poll
 
-    result = run_script('poll', app_config=pyscript.app_config)
+    result = run_script('poll')
 
     if result['success']:
         data = result.get('data', {})
@@ -229,7 +239,7 @@ def payme_daily_maintenance():
     # Check Google auth
     from payme import update_google_auth_status
 
-    result = run_script('status', app_config=pyscript.app_config)
+    result = run_script('status')
     if result['success'] and result['data']:
         auth = result['data'].get('auth_status', {})
         if auth.get('status') in ('expiring', 'expired'):
@@ -263,7 +273,7 @@ def payme_approve(bill_id: str):
     """
     log.info(f'payme: Approving bill {bill_id}')
 
-    result = run_script('approve', bill_id, app_config=pyscript.app_config)
+    result = run_script('approve', bill_id)
 
     if result['success']:
         log.info(f'payme: Bill {bill_id} approved')
@@ -286,7 +296,7 @@ def payme_reject(bill_id: str):
     """
     log.info(f'payme: Rejecting bill {bill_id}')
 
-    result = run_script('reject', bill_id, app_config=pyscript.app_config)
+    result = run_script('reject', bill_id)
 
     if result['success']:
         log.info(f'payme: Bill {bill_id} rejected')
@@ -308,7 +318,7 @@ def payme_override_duplicate(bill_id: str):
     """
     log.info(f'payme: Overriding duplicate for bill {bill_id}')
 
-    result = run_script('override-duplicate', bill_id, app_config=pyscript.app_config)
+    result = run_script('override-duplicate', bill_id)
     update_entities_from_status(app_config=pyscript.app_config)
 
 
@@ -352,7 +362,7 @@ def payme_test_script():
     """
     log.info('payme: Testing run_script')
 
-    result = run_script('status', app_config=pyscript.app_config)
+    result = run_script('status')
 
     log.info(f'payme: run_script returned success={result.get("success")}')
 
@@ -396,7 +406,7 @@ def payme_get_status():
 
     Logs status to pyscript log.
     """
-    result = run_script('status', app_config=pyscript.app_config)
+    result = run_script('status')
     log.info(f"payme status: {result.get('data', {})}")
 
 
@@ -431,7 +441,7 @@ def payme_set_status(bill_id: str, status: str):
 
     log.info(f'payme: Setting bill {bill_id} status to {status}')
 
-    result = run_script('set-status', bill_id, status, app_config=pyscript.app_config)
+    result = run_script('set-status', bill_id, status)
 
     if result['success']:
         log.info(f'payme: Bill {bill_id} status updated to {status}')
