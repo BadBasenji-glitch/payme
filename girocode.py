@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 try:
-    import cv2
+    from PIL import Image
     from pyzbar import pyzbar
     DEPENDENCIES_AVAILABLE = True
 except ImportError:
@@ -150,17 +150,15 @@ def decode_qr_codes(image_path: Path) -> list[str]:
     """
     if not DEPENDENCIES_AVAILABLE:
         raise RuntimeError(
-            'QR detection requires pyzbar and opencv-python-headless. '
-            'Install with: pip install pyzbar opencv-python-headless'
+            'QR detection requires pyzbar and Pillow. '
+            'Install with: pip install pyzbar Pillow'
         )
 
-    # Read image
-    image = cv2.imread(str(image_path))
-    if image is None:
-        raise ValueError(f'Could not read image: {image_path}')
+    # Read image with PIL
+    image = Image.open(str(image_path))
 
     # Convert to grayscale for better detection
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = image.convert('L')
 
     # Detect QR codes
     codes = pyzbar.decode(gray)
@@ -213,21 +211,17 @@ def extract_girocode_from_bytes(image_data: bytes) -> Optional[GiroCodeData]:
     """
     if not DEPENDENCIES_AVAILABLE:
         raise RuntimeError(
-            'QR detection requires pyzbar and opencv-python-headless. '
-            'Install with: pip install pyzbar opencv-python-headless'
+            'QR detection requires pyzbar and Pillow. '
+            'Install with: pip install pyzbar Pillow'
         )
 
-    import numpy as np
+    import io
 
-    # Decode image from bytes
-    image_array = np.frombuffer(image_data, dtype=np.uint8)
-    image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
-
-    if image is None:
-        raise ValueError('Could not decode image data')
+    # Decode image from bytes using PIL
+    image = Image.open(io.BytesIO(image_data))
 
     # Convert to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = image.convert('L')
 
     # Detect QR codes
     codes = pyzbar.decode(gray)
