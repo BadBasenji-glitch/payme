@@ -225,7 +225,7 @@ def payme_scheduled_poll():
         log.error(f"payme: Poll failed - {result.get('error')}")
 
     # Update all entities
-    update_entities_from_status(app_config=pyscript.app_config)
+    update_entities_from_status()
 
 
 @time_trigger('cron(0 6 * * *)')
@@ -234,7 +234,7 @@ def payme_daily_maintenance():
     log.info('payme: Running daily maintenance')
 
     # Update entities
-    update_entities_from_status(app_config=pyscript.app_config)
+    update_entities_from_status()
 
     # Check Google auth
     from payme import update_google_auth_status
@@ -281,7 +281,7 @@ def payme_approve(bill_id: str):
         log.error(f"payme: Approve failed - {result.get('error')}")
         log.error(f"payme: Script output - {result.get('data')}")
 
-    update_entities_from_status(app_config=pyscript.app_config)
+    update_entities_from_status()
 
 
 @service
@@ -303,7 +303,7 @@ def payme_reject(bill_id: str):
     else:
         log.error(f"payme: Reject failed - {result.get('error')}")
 
-    update_entities_from_status(app_config=pyscript.app_config)
+    update_entities_from_status()
 
 
 @service
@@ -319,7 +319,7 @@ def payme_override_duplicate(bill_id: str):
     log.info(f'payme: Overriding duplicate for bill {bill_id}')
 
     result = run_script('override-duplicate', bill_id)
-    update_entities_from_status(app_config=pyscript.app_config)
+    update_entities_from_status()
 
 
 @service
@@ -330,7 +330,7 @@ def payme_refresh():
     Call via: service: pyscript.payme_refresh
     """
     log.info('payme: Refreshing entities')
-    update_entities_from_status(app_config=pyscript.app_config)
+    update_entities_from_status()
 
 
 @service
@@ -448,7 +448,7 @@ def payme_set_status(bill_id: str, status: str):
     else:
         log.error(f"payme: Set status failed - {result.get('error')}")
 
-    update_entities_from_status(app_config=pyscript.app_config)
+    update_entities_from_status()
 
 
 # =============================================================================
@@ -487,7 +487,7 @@ def handle_notification_action(**kwargs):
 
     elif action_type == 'VIEW':
         # Trigger a refresh so dashboard shows latest
-        update_entities_from_status(app_config=pyscript.app_config)
+        update_entities_from_status()
 
 
 @event_trigger('ios.notification_action_fired')
@@ -524,6 +524,6 @@ def payme_startup():
 
     # Fetch actual status
     task.sleep(5)  # Wait for HA to be fully ready
-    update_entities_from_status(app_config=pyscript.app_config)
+    update_entities_from_status()
 
     log.info('payme: Startup complete')
