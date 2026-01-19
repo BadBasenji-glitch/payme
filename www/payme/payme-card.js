@@ -103,27 +103,39 @@ class PaymeCard extends HTMLElement {
 
     // Load pending bills
     const pendingEntity = this._hass.states['sensor.payme_pending_bills'];
+    console.log('PAYME: pendingEntity state:', pendingEntity ? pendingEntity.state : 'not found');
+    console.log('PAYME: pendingEntity attributes:', pendingEntity ? pendingEntity.attributes : 'none');
     if (pendingEntity && pendingEntity.attributes.bills) {
       try {
         this._bills = JSON.parse(pendingEntity.attributes.bills);
+        console.log('PAYME: Loaded bills:', this._bills.length, this._bills.map(b => b.recipient + ':' + b.status));
       } catch (e) {
+        console.log('PAYME: Failed to parse bills:', e);
         this._bills = [];
       }
+    } else {
+      console.log('PAYME: No bills attribute found');
     }
 
     // Load payment history
     const historyEntity = this._hass.states['sensor.payme_payment_history'];
+    console.log('PAYME: historyEntity state:', historyEntity ? historyEntity.state : 'not found');
     if (historyEntity && historyEntity.attributes.history) {
       try {
         this._history = JSON.parse(historyEntity.attributes.history);
+        console.log('PAYME: Loaded history:', this._history.length, this._history.map(b => b.recipient + ':' + b.status));
       } catch (e) {
+        console.log('PAYME: Failed to parse history:', e);
         this._history = [];
       }
+    } else {
+      console.log('PAYME: No history attribute found');
     }
 
     // Load balance
     const balanceEntity = this._hass.states['sensor.payme_wise_balance'];
     this._balance = balanceEntity ? parseFloat(balanceEntity.state) : 0;
+    console.log('PAYME: Balance:', this._balance);
   }
 
   _getFilteredBills() {
