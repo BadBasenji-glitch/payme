@@ -18,6 +18,7 @@ from typing import Optional
 from config import (
     PAYMENT_HISTORY_FILE,
     CONFIDENCE_THRESHOLD,
+    WISE_STATUS_MAP,
     ensure_directories,
 )
 from storage import load_json, save_json, append_to_list, backup_file
@@ -53,6 +54,20 @@ from notify import (
     clear_bill_notification,
 )
 from http_client import HttpError
+
+
+# Default structure for payment history file
+_EMPTY_HISTORY = {'pending': [], 'history': []}
+
+
+def _load_history_data() -> dict:
+    """Load payment history data with default structure."""
+    return load_json(PAYMENT_HISTORY_FILE, _EMPTY_HISTORY)
+
+
+def _save_history_data(data: dict) -> None:
+    """Save payment history data."""
+    save_json(PAYMENT_HISTORY_FILE, data)
 
 
 @dataclass
@@ -120,41 +135,35 @@ def generate_bill_id() -> str:
 
 def load_pending_bills() -> list[Bill]:
     """Load pending bills from storage."""
-    data = load_json(PAYMENT_HISTORY_FILE, {'pending': [], 'history': []})
+    data = _load_history_data()
     return [Bill.from_dict(b) for b in data.get('pending', [])]
 
 
 def save_pending_bills(bills: list[Bill]) -> None:
     """Save pending bills to storage."""
-    data = load_json(PAYMENT_HISTORY_FILE, {'pending': [], 'history': []})
+    data = _load_history_data()
     data['pending'] = [b.to_dict() for b in bills]
-    save_json(PAYMENT_HISTORY_FILE, data)
+    _save_history_data(data)
 
 
 def add_to_history(bill: Bill) -> None:
     """Add bill to payment history."""
-    data = load_json(PAYMENT_HISTORY_FILE, {'pending': [], 'history': []})
+    data = _load_history_data()
     data['history'].append(bill.to_dict())
-    save_json(PAYMENT_HISTORY_FILE, data)
+    _save_history_data(data)
 
 
 def move_to_history(bill: Bill) -> None:
     """Remove from pending and add to history in one atomic operation."""
-    data = load_json(PAYMENT_HISTORY_FILE, {'pending': [], 'history': []})
-    # Remove from pending
+    data = _load_history_data()
     data['pending'] = [b for b in data['pending'] if b.get('id') != bill.id]
-    # Add to history
     data['history'].append(bill.to_dict())
-    save_json(PAYMENT_HISTORY_FILE, data)
+    _save_history_data(data)
 
 
 def get_pending_bill(bill_id: str) -> Optional[Bill]:
     """Get pending bill by ID."""
-    bills = load_pending_bills()
-    for bill in bills:
-        if bill.id == bill_id:
-            return bill
-    return None
+    return next((b for b in load_pending_bills() if b.id == bill_id), None)
 
 
 def remove_pending_bill(bill_id: str) -> Optional[Bill]:
@@ -580,23 +589,16 @@ def set_transfer_id(bill_id: str, transfer_id: int) -> dict:
         'transfer_id': transfer_id,
     }
 
-    # Check history (bills with transfers are in history)
-    data = load_json(PAYMENT_HISTORY_FILE, {'pending': [], 'history': []})
+    data = _load_history_data()
 
-    for i, entry in enumerate(data.get('history', [])):
-        if entry.get('id') == bill_id:
-            data['history'][i]['transfer_id'] = transfer_id
-            save_json(PAYMENT_HISTORY_FILE, data)
-            result['success'] = True
-            return result
-
-    # Also check pending
-    for i, entry in enumerate(data.get('pending', [])):
-        if entry.get('id') == bill_id:
-            data['pending'][i]['transfer_id'] = transfer_id
-            save_json(PAYMENT_HISTORY_FILE, data)
-            result['success'] = True
-            return result
+    # Check both history and pending in a single load
+    for collection in ('history', 'pending'):
+        for i, entry in enumerate(data.get(collection, [])):
+            if entry.get('id') == bill_id:
+                data[collection][i]['transfer_id'] = transfer_id
+                _save_history_data(data)
+                result['success'] = True
+                return result
 
     result['error'] = f'Bill not found: {bill_id}'
     return result
@@ -650,16 +652,16 @@ def set_bill_status(bill_id: str, status: str) -> dict:
             return result
 
     # Check history if not found in pending
-    history = load_json(PAYMENT_HISTORY_FILE, {'history': []})
-    for i, entry in enumerate(history.get('history', [])):
+    data = _load_history_data()
+    for i, entry in enumerate(data.get('history', [])):
         if entry.get('id') == bill_id:
             old_status = entry.get('status')
-            history['history'][i]['status'] = status
+            data['history'][i]['status'] = status
 
             if status == 'paid' and not entry.get('paid_at'):
-                history['history'][i]['paid_at'] = datetime.now().isoformat()
+                data['history'][i]['paid_at'] = datetime.now().isoformat()
 
-            save_json(PAYMENT_HISTORY_FILE, history)
+            _save_history_data(data)
 
             result['success'] = True
             result['old_status'] = old_status
@@ -708,24 +710,8 @@ def check_transfer_statuses() -> dict:
         'errors': [],
     }
 
-    # Load history
-    data = load_json(PAYMENT_HISTORY_FILE, {'pending': [], 'history': []})
+    data = _load_history_data()
     history = data.get('history', [])
-
-    # Status mapping from Wise to our statuses
-    # Wise statuses: incoming_payment_waiting, processing, waiting_for_authorization,
-    #                outgoing_payment_sent, funds_converted, cancelled, funds_refunded, bounced_back
-    status_map = {
-        'outgoing_payment_sent': 'paid',
-        'funds_converted': 'paid',
-        'waiting_for_authorization': 'awaiting_2fa',
-        'cancelled': 'failed',
-        'funds_refunded': 'failed',
-        'bounced_back': 'failed',
-        'incoming_payment_waiting': 'awaiting_funding',
-        'processing': 'processing',
-    }
-
     modified = False
 
     for i, bill in enumerate(history):
@@ -744,7 +730,7 @@ def check_transfer_statuses() -> dict:
             # Get transfer status from Wise
             transfer = get_transfer(transfer_id)
             wise_status = transfer.status
-            new_status = status_map.get(wise_status, current_status)
+            new_status = WISE_STATUS_MAP.get(wise_status, current_status)
 
             if new_status != current_status:
                 history[i]['status'] = new_status
@@ -768,10 +754,9 @@ def check_transfer_statuses() -> dict:
         except Exception as e:
             result['errors'].append(f"Error checking transfer {transfer_id}: {str(e)}")
 
-    # Save if modified
     if modified:
         data['history'] = history
-        save_json(PAYMENT_HISTORY_FILE, data)
+        _save_history_data(data)
 
     return result
 

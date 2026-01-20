@@ -50,6 +50,24 @@ def run_cmd(cmd, timeout=30):
     except Exception as e:
         return -1, '', str(e)
 
+
+def ha_api_get(endpoint: str, token: str) -> tuple[int, str, str]:
+    """Make a GET request to the Home Assistant API."""
+    return run_cmd(
+        f'curl -s -H "Authorization: Bearer {token}" http://supervisor/core/api{endpoint}'
+    )
+
+
+def ha_api_post(endpoint: str, token: str, data: str = '') -> tuple[int, str, str]:
+    """Make a POST request to the Home Assistant API."""
+    if data:
+        return run_cmd(
+            f"curl -s -X POST -H 'Authorization: Bearer {token}' -H 'Content-Type: application/json' -d '{data}' http://supervisor/core/api{endpoint}"
+        )
+    return run_cmd(
+        f"curl -s -X POST -H 'Authorization: Bearer {token}' http://supervisor/core/api{endpoint}"
+    )
+
 def main():
     log(f'Payme Diagnostic Report')
     log(f'Generated: {datetime.now().isoformat()}')
@@ -236,15 +254,11 @@ def main():
     token = os.environ.get('SUPERVISOR_TOKEN', '')
     if token:
         # Test API access
-        code, stdout, stderr = run_cmd(
-            f'curl -s -H "Authorization: Bearer {token}" http://supervisor/core/api/'
-        )
+        code, stdout, stderr = ha_api_get('/', token)
         check('HA API accessible', code == 0 and 'message' in stdout.lower())
 
         # Get entity state
-        code, stdout, stderr = run_cmd(
-            f'curl -s -H "Authorization: Bearer {token}" http://supervisor/core/api/states/sensor.payme_pending_bills'
-        )
+        code, stdout, stderr = ha_api_get('/states/sensor.payme_pending_bills', token)
         if code == 0 and stdout:
             try:
                 entity = json.loads(stdout)
@@ -269,9 +283,7 @@ def main():
     # =========================================================================
 
     if token:
-        code, stdout, stderr = run_cmd(
-            f'curl -s -H "Authorization: Bearer {token}" http://supervisor/core/api/services'
-        )
+        code, stdout, stderr = ha_api_get('/services', token)
         if code == 0:
             try:
                 services = json.loads(stdout)
@@ -403,9 +415,7 @@ except:
                 'friendly_name': 'Pending Bills'
             }
         })
-        code, stdout, stderr = run_cmd(
-            f"curl -s -X POST -H 'Authorization: Bearer {token}' -H 'Content-Type: application/json' -d '{test_data}' http://supervisor/core/api/states/sensor.payme_test_entity"
-        )
+        code, stdout, stderr = ha_api_post('/states/sensor.payme_test_entity', token, test_data)
         check('Can create entity via API', code == 0 and 'entity_id' in stdout.lower())
 
         # Clean up test entity
@@ -437,9 +447,7 @@ except:
 
     # Step 3: Check entity
     if token:
-        code, stdout, stderr = run_cmd(
-            f'curl -s -H "Authorization: Bearer {token}" http://supervisor/core/api/states/sensor.payme_pending_bills'
-        )
+        code, stdout, stderr = ha_api_get('/states/sensor.payme_pending_bills', token)
         if code == 0:
             entity = json.loads(stdout)
             bills_json = entity.get('attributes', {}).get('bills', '[]')
@@ -462,18 +470,14 @@ except:
     # =========================================================================
 
     if token:
-        code, stdout, stderr = run_cmd(
-            f"curl -s -X POST -H 'Authorization: Bearer {token}' http://supervisor/core/api/services/pyscript/reload"
-        )
+        code, stdout, stderr = ha_api_post('/services/pyscript/reload', token)
         check('Pyscript reload succeeds', code == 0)
 
         import time
         time.sleep(2)
 
         # Check if services still exist
-        code, stdout, stderr = run_cmd(
-            f'curl -s -H "Authorization: Bearer {token}" http://supervisor/core/api/services'
-        )
+        code, stdout, stderr = ha_api_get('/services', token)
         if code == 0:
             services = json.loads(stdout)
             pyscript_services = [s for s in services if s.get('domain') == 'pyscript']
@@ -612,9 +616,7 @@ for b in bills[:3]:
         log('  Testing direct entity update via API...')
 
         # Get current value
-        code, stdout, stderr = run_cmd(
-            f'curl -s -H "Authorization: Bearer {token}" http://supervisor/core/api/states/sensor.payme_pending_bills'
-        )
+        code, stdout, stderr = ha_api_get('/states/sensor.payme_pending_bills', token)
         old_state = 'unknown'
         if code == 0:
             try:
@@ -634,15 +636,11 @@ for b in bills[:3]:
             }
         })
 
-        code, stdout, stderr = run_cmd(
-            f"curl -s -X POST -H 'Authorization: Bearer {token}' -H 'Content-Type: application/json' -d '{payload}' http://supervisor/core/api/states/sensor.payme_pending_bills"
-        )
+        code, stdout, stderr = ha_api_post('/states/sensor.payme_pending_bills', token, payload)
         check('Entity update API call succeeds', code == 0)
 
         # Verify
-        code, stdout, stderr = run_cmd(
-            f'curl -s -H "Authorization: Bearer {token}" http://supervisor/core/api/states/sensor.payme_pending_bills'
-        )
+        code, stdout, stderr = ha_api_get('/states/sensor.payme_pending_bills', token)
         if code == 0:
             try:
                 entity = json.loads(stdout)

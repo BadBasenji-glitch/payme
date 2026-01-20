@@ -19,26 +19,51 @@ from pathlib import Path
 SCRIPTS_PATH = '/config/scripts/payme'
 
 
+def _parse_secrets_yaml(content: str) -> dict:
+    """
+    Parse secrets from YAML content.
+
+    Uses PyYAML if available, falls back to simple line parsing.
+    """
+    # Try PyYAML first (available in Home Assistant)
+    try:
+        import yaml
+        return yaml.safe_load(content) or {}
+    except ImportError:
+        pass
+
+    # Fallback: simple line-based parsing for key: value format
+    secrets = {}
+    for line in content.split('\n'):
+        line = line.strip()
+        if ':' in line and not line.startswith('#'):
+            key, _, value = line.partition(':')
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and value:
+                secrets[key] = value
+    return secrets
+
+
+# Mapping from secrets.yaml keys to environment variable names
+_SECRETS_TO_ENV = {
+    'payme_gemini_api_key': 'PAYME_GEMINI_API_KEY',
+    'payme_wise_api_token': 'PAYME_WISE_API_TOKEN',
+    'payme_wise_profile_id': 'PAYME_WISE_PROFILE_ID',
+}
+
+
 def get_script_env():
     """Get environment variables for scripts, including secrets."""
     env = dict(os.environ)
 
-    # Read secrets directly from secrets.yaml
     secrets_path = Path('/config/secrets.yaml')
     if secrets_path.exists():
         try:
-            content = secrets_path.read_text()
-            for line in content.split('\n'):
-                line = line.strip()
-                if line.startswith('payme_gemini_api_key:'):
-                    val = line.split(':', 1)[1].strip().strip('"').strip("'")
-                    env['PAYME_GEMINI_API_KEY'] = val
-                elif line.startswith('payme_wise_api_token:'):
-                    val = line.split(':', 1)[1].strip().strip('"').strip("'")
-                    env['PAYME_WISE_API_TOKEN'] = val
-                elif line.startswith('payme_wise_profile_id:'):
-                    val = line.split(':', 1)[1].strip().strip('"').strip("'")
-                    env['PAYME_WISE_PROFILE_ID'] = val
+            secrets = _parse_secrets_yaml(secrets_path.read_text())
+            for secret_key, env_key in _SECRETS_TO_ENV.items():
+                if secret_key in secrets:
+                    env[env_key] = str(secrets[secret_key])
         except Exception as e:
             log.error(f'payme: Failed to read secrets: {e}')
 

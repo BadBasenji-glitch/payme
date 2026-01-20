@@ -7,7 +7,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
 
-from config import WISE_API_BASE, WISE_API_DELAY_SECONDS, get_env
+from config import (
+    WISE_API_BASE,
+    WISE_API_DELAY_SECONDS,
+    WISE_COMPLETE_STATUSES,
+    WISE_PENDING_STATUSES,
+    WISE_FAILED_STATUSES,
+    get_env,
+)
 from http_client import get_json, post_json, HttpError
 
 # Track last API call for rate limiting
@@ -88,11 +95,11 @@ class Transfer:
 
     @property
     def is_complete(self) -> bool:
-        return self.status in ('outgoing_payment_sent', 'funds_converted')
+        return self.status in WISE_COMPLETE_STATUSES
 
     @property
     def is_pending(self) -> bool:
-        return self.status in ('incoming_payment_waiting', 'processing', 'waiting_for_authorization')
+        return self.status in WISE_PENDING_STATUSES
 
     @property
     def needs_2fa(self) -> bool:
@@ -100,7 +107,7 @@ class Transfer:
 
     @property
     def is_failed(self) -> bool:
-        return self.status in ('cancelled', 'funds_refunded', 'bounced_back')
+        return self.status in WISE_FAILED_STATUSES
 
 
 def get_profiles() -> list[dict]:

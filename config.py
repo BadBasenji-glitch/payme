@@ -36,6 +36,25 @@ GOOGLE_PHOTOS_API_BASE = 'https://photoslibrary.googleapis.com/v1'
 OPENIBAN_API_BASE = 'https://openiban.com/validate'
 BUNDESBANK_BLZ_URL = 'https://www.bundesbank.de/resource/blob/602848/bba34a4e629304a37cf9a553c47af782/mL/blz-2024-06-03-txt-data.txt'
 
+# Wise status mapping: Wise API status -> payme internal status
+# Wise statuses: incoming_payment_waiting, processing, waiting_for_authorization,
+#                outgoing_payment_sent, funds_converted, cancelled, funds_refunded, bounced_back
+WISE_STATUS_MAP = {
+    'outgoing_payment_sent': 'paid',
+    'funds_converted': 'paid',
+    'waiting_for_authorization': 'awaiting_2fa',
+    'cancelled': 'failed',
+    'funds_refunded': 'failed',
+    'bounced_back': 'failed',
+    'incoming_payment_waiting': 'awaiting_funding',
+    'processing': 'processing',
+}
+
+# Grouped status sets for Transfer class properties
+WISE_COMPLETE_STATUSES = {'outgoing_payment_sent', 'funds_converted'}
+WISE_PENDING_STATUSES = {'incoming_payment_waiting', 'processing', 'waiting_for_authorization'}
+WISE_FAILED_STATUSES = {'cancelled', 'funds_refunded', 'bounced_back'}
+
 
 def get_env(key: str, default: str = None, required: bool = False) -> str:
     """Get environment variable with optional default."""
