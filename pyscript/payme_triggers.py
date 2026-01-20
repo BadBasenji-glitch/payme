@@ -563,28 +563,32 @@ def handle_ios_notification_action(**kwargs):
 # Startup
 # =============================================================================
 
-@time_trigger('startup')
+@state_trigger("homeassistant.state == 'running'")
 def payme_startup():
     """Initialize payme on Home Assistant startup."""
     log.info('payme: Initializing on startup')
 
-    # Create initial entity states
-    from payme import (
-        update_pending_bills,
-        update_wise_balance,
-        update_google_auth_status,
-        update_awaiting_2fa,
-        update_last_poll,
-    )
+    try:
+        # Create initial entity states
+        from payme import (
+            update_pending_bills,
+            update_wise_balance,
+            update_google_auth_status,
+            update_awaiting_2fa,
+            update_last_poll,
+        )
 
-    # Set initial states
-    update_pending_bills([])
-    update_wise_balance(0.0)
-    update_google_auth_status('unknown', message='Not yet checked')
-    update_awaiting_2fa([])
+        # Set initial states
+        update_pending_bills([])
+        update_wise_balance(0.0)
+        update_google_auth_status('unknown', message='Not yet checked')
+        update_awaiting_2fa([])
 
-    # Fetch actual status
-    task.sleep(5)  # Wait for HA to be fully ready
-    update_entities_from_status()
+        # Fetch actual status - wait a bit for all services to be ready
+        task.sleep(10)
+        update_entities_from_status()
 
-    log.info('payme: Startup complete')
+        log.info('payme: Startup complete')
+
+    except Exception as e:
+        log.error(f'payme: Startup failed with error: {e}')
