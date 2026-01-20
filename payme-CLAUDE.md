@@ -1,13 +1,21 @@
 # CLAUDE.md
 
+Development guide for Claude (and humans) working on payme.
+
 ## Overview
 
-payme is a Home Assistant integration that automates bill payments. Photos of bills are added to a Google Photos album, parsed via Gemini, and paid via Wise with manual approval.
+payme is a Home Assistant integration that automates bill payments. Photos of bills are added to a Google Drive folder, parsed via GiroCode QR or Gemini OCR, and paid via Wise with manual approval.
 
-## Architecture
+**Key Design Decisions:**
+- All HTTP/API logic runs as subprocess via `poll.py` (not in pyscript) to avoid async issues
+- pyscript only handles: HA entity updates, triggers, service registration, event handling
+- GiroCode QR is tried first (100% accurate), Gemini OCR is fallback
+- Personal Wise accounts cannot auto-fund transfers (PSD2) - user must approve in Wise app
+
+## Quick Architecture
 
 ```
-Google Photos → poll.py → gemini.py → wise.py → HA entities → Dashboard
+Google Drive → poll.py → gemini.py → wise.py → HA entities → Dashboard
                   ↓
               girocode.py (QR detection, tried first)
                   ↓
@@ -16,9 +24,7 @@ Google Photos → poll.py → gemini.py → wise.py → HA entities → Dashboar
               dedup.py (duplicate check)
 ```
 
-All HTTP logic runs in `/config/scripts/payme/` via shell_command (not pyscript) to avoid async issues.
-
-pyscript handles only: HA entity updates, triggers, service registration.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical reference.
 
 ## Module Structure
 
@@ -27,7 +33,7 @@ Keep code modular. Each file has a single responsibility:
 | Module | Responsibility | Depends on |
 |--------|----------------|------------|
 | `poll.py` | Orchestration, entry point | all others |
-| `google_photos.py` | Photos API auth and requests | `storage.py` |
+| `google_drive.py` | Drive API auth and requests | `storage.py` |
 | `gemini.py` | OCR and bill parsing | — |
 | `girocode.py` | QR code detection | — |
 | `iban.py` | IBAN validation, bank lookup | `storage.py` |
@@ -35,7 +41,7 @@ Keep code modular. Each file has a single responsibility:
 | `dedup.py` | Duplicate detection | `storage.py` |
 | `storage.py` | All JSON file read/write | — |
 | `notify.py` | HA notification calls | — |
-| `config.py` | Load secrets, constants | — |
+| `config.py` | Load secrets, constants, status mappings | — |
 
 **Rules:**
 
@@ -165,7 +171,111 @@ Never hardcode. Never log.
 
 ## Known Limitations
 
-- Google Photos API has no "new items since" filter—we fetch all and compare locally
-- Wise may require 2FA in app for some transfers—this is expected, not a bug
-- Album matching requires listing all albums (no search by name API)
+- Google Drive API has no "new items since" filter—we fetch all and compare locally
+- Personal Wise accounts cannot fund transfers via API (PSD2 restriction)—user must fund in Wise app
+- Wise 2FA is always required for transfers—this is expected, not a bug
+- Folder matching requires listing all folders (no search by name API)
 - openiban.com has no SLA—bank lookup may fail silently
+
+## Debugging Guide
+
+**Check if scripts work:**
+```bash
+cd /config/scripts/payme
+python3 poll.py status        # System status
+python3 poll.py list          # List pending bills
+python3 poll.py poll          # Run poll manually
+```
+
+**Check pyscript logs:**
+```bash
+grep "payme" /config/home-assistant.log | tail -50
+```
+
+**Test individual modules:**
+```bash
+python3 iban.py DE89370400440532013000       # IBAN validation
+python3 girocode.py /path/to/bill.jpg        # QR extraction
+python3 gemini.py /path/to/bill.jpg          # OCR test
+python3 wise.py                              # Wise dataclass tests
+```
+
+**Common Issues:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| "No tokens found" | Missing Google auth | Run `authorize_google.py` |
+| "Folder not found" | Wrong folder name | Check `PAYME_ALBUM_NAME` matches exactly |
+| "Invalid IBAN" | OCR error | Check image quality, try GiroCode |
+| "Insufficient balance" | Low Wise funds | Top up EUR balance |
+| Bill stuck in `awaiting_funding` | Normal for personal accounts | Fund in Wise app |
+
+## Adding New Features
+
+**New parsed field from bills:**
+1. Update prompt in `gemini.py` (BILL_PARSE_PROMPT)
+2. Add field to `ParsedBill` dataclass in `gemini.py`
+3. Add field to `Bill` dataclass in `poll.py`
+4. Update `process_photo_group()` to map the field
+5. Update dashboard card in `payme-card.js` if needed
+
+**New notification type:**
+1. Add function in `notify.py` following existing pattern
+2. Call from appropriate place in `poll.py`
+3. Update event handler in `payme_triggers.py` if actionable
+
+**New bill status:**
+1. Add to `valid_statuses` list in `poll.py:set_bill_status()`
+2. Add to `WISE_STATUS_MAP` in `config.py` if from Wise (centralized status mapping)
+3. Update dashboard card to handle new status
+4. Update `Transfer` dataclass properties if needed
+
+**New HA service:**
+1. Add `@service` function in `payme_triggers.py`
+2. If it needs script execution, use `run_script(command, *args)`
+3. Call `update_entities_from_status()` if state changed
+
+## File Organization Rules
+
+| If you need... | Put it in... |
+|----------------|--------------|
+| New API integration | New module (e.g., `newapi.py`) |
+| Shared utility | `storage.py`, `http_client.py`, or `formatting.py` |
+| New CLI command | `poll.py` (add to argparse) |
+| New HA service | `payme_triggers.py` |
+| New entity | `entities.py` + update in `payme_triggers.py` |
+| New dashboard feature | `payme-card.js` |
+
+## Important Patterns
+
+**Environment variables in pyscript:**
+```python
+# payme_triggers.py reads secrets.yaml using PyYAML (with fallback)
+def get_script_env():
+    env = dict(os.environ)
+    secrets = _parse_secrets_yaml(secrets_content)  # Uses PyYAML if available
+    for yaml_key, env_key in _SECRETS_TO_ENV.items():
+        if yaml_key in secrets:
+            env[env_key] = str(secrets[yaml_key])
+    return env
+```
+
+**Entity updates from scripts:**
+```python
+# run_script() returns parsed JSON
+result = run_script('status')
+if result['success']:
+    state.set('sensor.payme_xyz', value, new_attributes={...})
+```
+
+**Error propagation:**
+```python
+# In modules, raise HttpError for API failures
+raise HttpError(f'API call failed: {response.status_code}')
+
+# In poll.py, catch and log/notify
+try:
+    result = some_api_call()
+except HttpError as e:
+    notify_error(str(e))
+```

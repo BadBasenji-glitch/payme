@@ -1,6 +1,8 @@
 # payme Installation Guide
 
-Automated bill payment system for Home Assistant. Photograph bills, add to a Google Photos album, and payme handles OCR, validation, and Wise payment drafts.
+Automated bill payment system for Home Assistant. Photograph bills, add to a Google Drive folder, and payme handles OCR, validation, and Wise payment drafts.
+
+**See also:** [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical reference.
 
 ## Architecture Overview
 
@@ -8,8 +10,8 @@ Automated bill payment system for Home Assistant. Photograph bills, add to a Goo
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              USER WORKFLOW                                   │
 │                                                                             │
-│   1. Take photo of bill    2. Add to Google Photos     3. Approve via       │
-│      with phone               "bill-pay" album            notification      │
+│   1. Take photo of bill    2. Add to Google Drive      3. Approve via       │
+│      with phone               "bill-pay" folder           notification      │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
@@ -38,9 +40,9 @@ Automated bill payment system for Home Assistant. Photograph bills, add to a Goo
 │  │         ┌────────────────────┼────────────────────┐                 │   │
 │  │         ▼                    ▼                    ▼                 │   │
 │  │  ┌─────────────┐     ┌─────────────┐      ┌─────────────┐          │   │
-│  │  │google_photos│     │  girocode   │      │   gemini    │          │   │
+│  │  │google_drive │     │  girocode   │      │   gemini    │          │   │
 │  │  │   .py       │     │    .py      │      │    .py      │          │   │
-│  │  │ Album fetch │     │ QR parsing  │      │ OCR parsing │          │   │
+│  │  │Folder fetch │     │ QR parsing  │      │ OCR parsing │          │   │
 │  │  └─────────────┘     └─────────────┘      └─────────────┘          │   │
 │  │         │                                        │                  │   │
 │  │         ▼                                        ▼                  │   │
@@ -78,7 +80,7 @@ Automated bill payment system for Home Assistant. Photograph bills, add to a Goo
                     ┌─────────────────┼─────────────────┐
                     ▼                 ▼                 ▼
             ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-            │Google Photos│   │   Gemini    │   │    Wise     │
+            │Google Drive │   │   Gemini    │   │    Wise     │
             │    API      │   │    API      │   │    API      │
             │             │   │   (OCR)     │   │ (Payments)  │
             └─────────────┘   └─────────────┘   └─────────────┘
@@ -92,7 +94,7 @@ Automated bill payment system for Home Assistant. Photograph bills, add to a Goo
 └──────────────────────────────────────────────────────────────────────────┘
 
 1. FETCH PHOTOS
-   Google Photos API → Get photos from "bill-pay" album
+   Google Drive API → Get images from "bill-pay" folder
                     → Filter out already-processed photos
                     → Group photos taken within 5 minutes (multi-page bills)
 
@@ -169,7 +171,7 @@ Automated bill payment system for Home Assistant. Photograph bills, add to a Goo
 │       ├── dedup.py               # Duplicate detection
 │       ├── girocode.py            # EPC QR code parsing
 │       ├── gemini.py              # Gemini OCR integration
-│       ├── google_photos.py       # Google Photos API client
+│       ├── google_drive.py        # Google Drive API client
 │       ├── wise.py                # Wise API client
 │       ├── notify.py              # HA notifications
 │       ├── poll.py                # Main orchestrator (CLI entry point)
@@ -222,7 +224,7 @@ Automated bill payment system for Home Assistant. Photograph bills, add to a Goo
    - Mobile app configured for notifications
 
 2. **Google Cloud Project** with:
-   - Photos Library API enabled
+   - Google Drive API enabled
    - OAuth 2.0 credentials (Desktop application type)
 
 3. **Gemini API Key** from:
@@ -323,7 +325,7 @@ iban.py
 dedup.py
 girocode.py
 gemini.py
-google_photos.py
+google_drive.py
 wise.py
 notify.py
 poll.py
@@ -377,7 +379,7 @@ payme_wise_profile_id: "your-profile-id"
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select existing
-3. Enable "Photos Library API"
+3. Enable "Google Drive API"
 4. Create OAuth 2.0 credentials:
    - Application type: Desktop application
    - Download the JSON file
@@ -407,10 +409,10 @@ python3 update_bic_db.py
 
 This downloads the Deutsche Bundesbank BLZ database for German bank lookups.
 
-### Step 8: Create Google Photos Album
+### Step 8: Create Google Drive Folder
 
-1. Open Google Photos on your phone
-2. Create a new album named exactly: `bill-pay`
+1. Open Google Drive on your phone or computer
+2. Create a new folder named exactly: `bill-pay`
 3. This is where you'll add bill photos
 
 ### Step 9: Add Dashboard Card
@@ -450,8 +452,8 @@ ha core restart
 | `PAYME_GEMINI_API_KEY` | Yes | Gemini API key for OCR |
 | `PAYME_WISE_API_TOKEN` | Yes | Wise API token |
 | `PAYME_WISE_PROFILE_ID` | Yes | Wise profile ID |
-| `PAYME_ALBUM_NAME` | No | Google Photos album (default: "bill-pay") |
-| `PAYME_ALBUM_ID` | No | Album ID (auto-detected if not set) |
+| `PAYME_ALBUM_NAME` | No | Google Drive folder (default: "bill-pay") |
+| `PAYME_ALBUM_ID` | No | Folder ID (auto-detected if not set) |
 | `PAYME_NOTIFY_SERVICE` | No | HA notify service (default: "mobile_app_phone") |
 
 ### Constants (in config.py)
@@ -469,7 +471,7 @@ ha core restart
 ### Adding Bills
 
 1. Take a photo of the bill with your phone
-2. Add the photo to the "bill-pay" album in Google Photos
+2. Add the photo to the "bill-pay" folder in Google Drive
 3. Wait for the next poll (every 30 minutes) or trigger manually
 4. Receive notification with bill details
 5. Tap "Approve" to create Wise transfer draft
@@ -479,7 +481,7 @@ ha core restart
 
 For bills spanning multiple pages:
 1. Take photos of all pages within 5 minutes
-2. Add all photos to the album
+2. Add all photos to the folder
 3. payme will automatically group and analyze them together
 
 ### Dashboard Features
@@ -569,7 +571,7 @@ python3 poll.py poll
 ### Common Issues
 
 **"No photos found"**
-- Verify album name matches exactly (case-sensitive)
+- Verify folder name matches exactly (case-sensitive)
 - Check Google OAuth tokens are valid
 - Run `python3 poll.py status` to see auth status
 

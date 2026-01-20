@@ -1,12 +1,12 @@
 # payme
 
-Automated bill payment for Home Assistant. Photograph a bill, add it to a Google Photos album, and receive a mobile notification to approve payment via Wise.
+Automated bill payment for Home Assistant. Photograph a bill, add it to a Google Drive folder, and receive a mobile notification to approve payment via Wise.
 
 ## How It Works
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  1. Photo   │────►│  2. Album   │────►│  3. Parse   │────►│  4. Notify  │
+│  1. Photo   │────►│  2. Folder  │────►│  3. Parse   │────►│  4. Notify  │
 │  Take bill  │     │  Add to     │     │  OCR or QR  │     │  Approve?   │
 │  photo      │     │  "bill-pay" │     │  extract    │     │             │
 └─────────────┘     └─────────────┘     └─────────────┘     └──────┬──────┘
@@ -14,16 +14,16 @@ Automated bill payment for Home Assistant. Photograph a bill, add it to a Google
                     ┌─────────────┐     ┌─────────────┐            │
                     │  6. Done    │◄────│  5. Pay     │◄───────────┘
                     │  History    │     │  Wise draft │
-                    │  updated    │     │  + 2FA      │
+                    │  updated    │     │  + fund     │
                     └─────────────┘     └─────────────┘
 ```
 
 1. Take a photo of your bill with your phone
-2. Add the photo to the "bill-pay" album in Google Photos
-3. Home Assistant polls the album every 30 minutes
+2. Add the photo to the "bill-pay" folder in Google Drive
+3. Home Assistant polls the folder every 30 minutes
 4. Bills are parsed via GiroCode QR or Gemini OCR
 5. You receive a notification with payment details and Approve/Reject buttons
-6. On approval, a Wise transfer draft is created (complete 2FA in Wise app)
+6. On approval, a Wise transfer is created (fund in Wise app)
 
 ## Features
 
@@ -61,7 +61,7 @@ Click any row for full details, translations, and action buttons.
 ## Requirements
 
 - **Home Assistant** with pyscript (via HACS)
-- **Google Cloud Project** with Photos Library API
+- **Google Cloud Project** with Drive API enabled
 - **Gemini API Key** from Google AI Studio
 - **Wise Account** with API token and EUR balance
 
@@ -77,10 +77,12 @@ The install script handles directories, file copying, dependencies, and configur
 
 1. Add your API keys to `secrets.yaml`
 2. Run Google OAuth setup (one-time)
-3. Create "bill-pay" album in Google Photos
+3. Create "bill-pay" folder in Google Drive
 4. Add the Lovelace card to your dashboard
 
 **See [INSTALL.md](INSTALL.md) for complete installation guide.**
+
+**See [ARCHITECTURE.md](ARCHITECTURE.md) for technical reference.**
 
 ## File Structure
 
@@ -91,7 +93,10 @@ The install script handles directories, file copying, dependencies, and configur
 │   ├── gemini.py            # OCR integration
 │   ├── girocode.py          # QR code parsing
 │   ├── wise.py              # Payment API
-│   ├── google_photos.py     # Album polling
+│   ├── google_drive.py      # Drive API client
+│   ├── iban.py              # IBAN validation
+│   ├── dedup.py             # Duplicate detection
+│   ├── notify.py            # HA notifications
 │   └── ...
 ├── pyscript/
 │   ├── modules/payme/       # HA entity management
@@ -145,7 +150,7 @@ data:
 
 | Issue | Solution |
 |-------|----------|
-| No photos found | Check album name, verify OAuth tokens |
+| No photos found | Check folder name, verify OAuth tokens |
 | Low confidence | Re-photograph with better lighting |
 | Duplicate warning | Override if intentional (recurring bill) |
 | Insufficient balance | Top up Wise, bill auto-retries |
