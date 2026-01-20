@@ -848,7 +848,6 @@ def main():
     args = parser.parse_args()
 
     if args.command == 'poll':
-        print('Polling for new bills...')
         result = poll_for_new_bills()
         print(json.dumps(result.to_dict(), indent=2))
 

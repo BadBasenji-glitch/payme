@@ -46,11 +46,14 @@ class PaymeCard extends HTMLElement {
     // Check for button clicks
     const btn = target.closest('button');
     if (!btn) {
-      // Also check for mwc-icon-button (refresh)
-      const iconBtn = target.closest('mwc-icon-button');
-      if (iconBtn && iconBtn.classList.contains('refresh-btn')) {
-        this._poll();
-      }
+      return;
+    }
+
+    // Handle refresh button
+    if (btn.classList.contains('refresh-btn')) {
+      e.stopPropagation();
+      console.log('Refresh clicked');
+      this._poll();
       return;
     }
 
@@ -297,9 +300,9 @@ class PaymeCard extends HTMLElement {
           <div class="header-title">
             <span class="title">Bills</span>
           </div>
-          <mwc-icon-button class="refresh-btn" @click="${() => this._poll()}">
+          <button class="refresh-btn">
             <ha-icon icon="mdi:refresh"></ha-icon>
-          </mwc-icon-button>
+          </button>
         </div>
 
         <div class="balance-bar ${balanceStatus.state}">
@@ -542,8 +545,23 @@ class PaymeCard extends HTMLElement {
       }
 
       .refresh-btn {
-        --mdc-icon-button-size: 36px;
+        background: none;
+        border: none;
+        padding: 8px;
+        cursor: pointer;
         color: var(--payme-text-secondary);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .refresh-btn:hover {
+        background: var(--payme-surface-variant);
+      }
+
+      .refresh-btn ha-icon {
+        --mdc-icon-size: 24px;
       }
 
       /* Balance Bar */
