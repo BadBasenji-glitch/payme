@@ -306,8 +306,8 @@ def list_folder_photos(folder_id: str = None) -> list[dict]:
     page_token = None
 
     while True:
-        # Query for image files in the folder
-        query = f"'{folder_id}' in parents and mimeType contains 'image/' and trashed=false"
+        # Query for image files and PDFs in the folder
+        query = f"'{folder_id}' in parents and (mimeType contains 'image/' or mimeType = 'application/pdf') and trashed=false"
         params = {
             'q': query,
             'fields': 'nextPageToken, files(id, name, mimeType, createdTime, imageMediaMetadata)',

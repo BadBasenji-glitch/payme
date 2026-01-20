@@ -147,6 +147,7 @@ def encode_image(image_path: Path) -> tuple[str, str]:
         '.png': 'image/png',
         '.gif': 'image/gif',
         '.webp': 'image/webp',
+        '.pdf': 'application/pdf',
     }
     mime_type = mime_types.get(suffix, 'image/jpeg')
 

@@ -186,30 +186,43 @@ def process_photo_group(photos: list[dict]) -> Optional[Bill]:
     bill_id = generate_bill_id()
     photo_ids = [p['id'] for p in photos]
 
-    # Download photos
-    downloaded_images = []
+    # Download photos/PDFs
+    downloaded_files = []
     temp_files = []
+    has_pdf = False
 
     try:
         for photo in photos:
-            image_data = download_photo(photo, size='large')
-            downloaded_images.append((image_data, photo.get('mimeType', 'image/jpeg')))
+            file_data = download_photo(photo, size='large')
+            mime_type = photo.get('mimeType', 'image/jpeg')
+            downloaded_files.append((file_data, mime_type))
+
+            # Determine file suffix based on MIME type
+            if mime_type == 'application/pdf':
+                suffix = '.pdf'
+                has_pdf = True
+            elif mime_type == 'image/png':
+                suffix = '.png'
+            else:
+                suffix = '.jpg'
 
             # Save to temp file for girocode/gemini
             temp_file = tempfile.NamedTemporaryFile(
-                suffix='.jpg',
+                suffix=suffix,
                 delete=False,
             )
-            temp_file.write(image_data)
+            temp_file.write(file_data)
             temp_file.close()
             temp_files.append(Path(temp_file.name))
 
-        # Try GiroCode detection first (more reliable)
+        # Try GiroCode detection first (more reliable) - skip for PDFs
         girocode_data = None
-        if girocode_available():
-            for i, (image_data, mime_type) in enumerate(downloaded_images):
+        if girocode_available() and not has_pdf:
+            for i, (file_data, mime_type) in enumerate(downloaded_files):
+                if mime_type == 'application/pdf':
+                    continue  # Skip PDFs for QR code detection
                 try:
-                    girocode_data = extract_girocode_from_bytes(image_data)
+                    girocode_data = extract_girocode_from_bytes(file_data)
                     if girocode_data:
                         break
                 except Exception:
