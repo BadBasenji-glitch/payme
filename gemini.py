@@ -15,7 +15,7 @@ from http_client import post_json, HttpError
 GEMINI_MODEL = 'gemini-2.0-flash'
 
 # Prompt for bill parsing
-BILL_PARSE_PROMPT = '''Analyze this bill/invoice image and extract the payment details.
+BILL_PARSE_PROMPT = '''Analyze this bill/invoice document and extract the payment details.
 
 Return a JSON object with these fields:
 {

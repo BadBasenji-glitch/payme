@@ -363,44 +363,12 @@ def get_new_photos(album_id: str = None) -> list[dict]:
 
 def group_photos_by_time(photos: list[dict]) -> list[list[dict]]:
     """
-    Group photos taken within PHOTO_GROUPING_MINUTES of each other.
-
-    Used to combine multi-page bill photos.
-    Returns list of photo groups (each group is a list of photos).
+    Return each photo as its own group (grouping disabled).
+    Each photo/file is treated as a separate bill.
     """
     if not photos:
         return []
-
-    # Sort by creation time
-    sorted_photos = sorted(photos, key=lambda p: p.get('creationTime', ''))
-
-    groups = []
-    current_group = [sorted_photos[0]]
-
-    for photo in sorted_photos[1:]:
-        prev_time = current_group[-1].get('creationTime', '')
-        curr_time = photo.get('creationTime', '')
-
-        if prev_time and curr_time:
-            try:
-                prev_dt = datetime.fromisoformat(prev_time.replace('Z', '+00:00'))
-                curr_dt = datetime.fromisoformat(curr_time.replace('Z', '+00:00'))
-                diff = (curr_dt - prev_dt).total_seconds() / 60
-
-                if diff <= PHOTO_GROUPING_MINUTES:
-                    current_group.append(photo)
-                    continue
-            except (ValueError, TypeError):
-                pass
-
-        # Start new group
-        groups.append(current_group)
-        current_group = [photo]
-
-    # Don't forget last group
-    groups.append(current_group)
-
-    return groups
+    return [[photo] for photo in photos]
 
 
 def download_photo(photo: dict, size: str = 'full') -> bytes:

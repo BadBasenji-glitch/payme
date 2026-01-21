@@ -150,7 +150,10 @@ class PaymeCard extends HTMLElement {
       case 'processing':
         return allBills.filter(b => ['awaiting_2fa', 'awaiting_funding', 'processing', 'insufficient_balance'].includes(b.status));
       case 'complete':
-        return allBills.filter(b => ['paid', 'rejected', 'failed'].includes(b.status));
+        return allBills.filter(b =>
+          ['paid', 'rejected', 'failed'].includes(b.status) &&
+          this._isRecentlyCompleted(b)
+        );
       case 'all':
         // Sort by created_at descending for history view
         return [...allBills].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
@@ -177,6 +180,19 @@ class PaymeCard extends HTMLElement {
       });
     } catch (e) {
       return dateStr;
+    }
+  }
+
+  _isRecentlyCompleted(bill) {
+    const completionDate = bill.paid_at || bill.created_at;
+    if (!completionDate) return true;
+    try {
+      const date = new Date(completionDate);
+      const now = new Date();
+      const diffDays = (now - date) / (1000 * 60 * 60 * 24);
+      return diffDays <= 2;
+    } catch (e) {
+      return true;
     }
   }
 
@@ -285,10 +301,14 @@ class PaymeCard extends HTMLElement {
 
   _render() {
     const bills = this._getFilteredBills();
-    const pendingCount = [...this._bills, ...this._history].filter(b => b.status === 'pending').length;
-    const processingCount = [...this._bills, ...this._history].filter(b => ['awaiting_2fa', 'awaiting_funding', 'processing', 'insufficient_balance'].includes(b.status)).length;
-    const completeCount = [...this._bills, ...this._history].filter(b => ['paid', 'rejected', 'failed'].includes(b.status)).length;
-    const allCount = [...this._bills, ...this._history].length;
+    const allBills = [...this._bills, ...this._history];
+    const pendingCount = allBills.filter(b => b.status === 'pending').length;
+    const processingCount = allBills.filter(b => ['awaiting_2fa', 'awaiting_funding', 'processing', 'insufficient_balance'].includes(b.status)).length;
+    const completeCount = allBills.filter(b =>
+      ['paid', 'rejected', 'failed'].includes(b.status) &&
+      this._isRecentlyCompleted(b)
+    ).length;
+    const allCount = allBills.length;
 
     const balanceStatus = this._getBalanceStatus();
 
@@ -324,9 +344,11 @@ class PaymeCard extends HTMLElement {
           </button>
         </div>
 
-        <div class="card-content">
-          ${this._selectedBill ? this._renderDetail() : this._renderTable(bills)}
-        </div>
+        ${this._selectedBill || bills.length > 0 ? `
+          <div class="card-content">
+            ${this._selectedBill ? this._renderDetail() : this._renderTable(bills)}
+          </div>
+        ` : ''}
       </ha-card>
     `;
 

@@ -294,9 +294,9 @@ def get_folder_id() -> str:
 
 def list_folder_photos(folder_id: str = None) -> list[dict]:
     """
-    List all image files in a folder.
+    List all image and PDF files in a folder.
 
-    Returns list of photo dicts with id, filename, mimeType, creationTime.
+    Returns list of file dicts with id, filename, mimeType, creationTime.
     """
     if folder_id is None:
         folder_id = get_folder_id()
@@ -307,7 +307,7 @@ def list_folder_photos(folder_id: str = None) -> list[dict]:
 
     while True:
         # Query for image files and PDFs in the folder
-        query = f"'{folder_id}' in parents and (mimeType contains 'image/' or mimeType = 'application/pdf') and trashed=false"
+        query = f"'{folder_id}' in parents and (mimeType contains 'image/' or mimeType contains 'pdf') and trashed=false"
         params = {
             'q': query,
             'fields': 'nextPageToken, files(id, name, mimeType, createdTime, imageMediaMetadata)',
@@ -374,44 +374,12 @@ def get_new_photos(folder_id: str = None) -> list[dict]:
 
 def group_photos_by_time(photos: list[dict]) -> list[list[dict]]:
     """
-    Group photos taken within PHOTO_GROUPING_MINUTES of each other.
-
-    Used to combine multi-page bill photos.
-    Returns list of photo groups (each group is a list of photos).
+    Return each photo as its own group (grouping disabled).
+    Each photo/file is treated as a separate bill.
     """
     if not photos:
         return []
-
-    # Sort by creation time
-    sorted_photos = sorted(photos, key=lambda p: p.get('creationTime', ''))
-
-    groups = []
-    current_group = [sorted_photos[0]]
-
-    for photo in sorted_photos[1:]:
-        prev_time = current_group[-1].get('creationTime', '')
-        curr_time = photo.get('creationTime', '')
-
-        if prev_time and curr_time:
-            try:
-                prev_dt = datetime.fromisoformat(prev_time.replace('Z', '+00:00'))
-                curr_dt = datetime.fromisoformat(curr_time.replace('Z', '+00:00'))
-                diff = (curr_dt - prev_dt).total_seconds() / 60
-
-                if diff <= PHOTO_GROUPING_MINUTES:
-                    current_group.append(photo)
-                    continue
-            except (ValueError, TypeError):
-                pass
-
-        # Start new group
-        groups.append(current_group)
-        current_group = [photo]
-
-    # Don't forget last group
-    groups.append(current_group)
-
-    return groups
+    return [[photo] for photo in photos]
 
 
 def download_photo(photo: dict, size: str = 'full') -> bytes:
