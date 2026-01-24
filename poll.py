@@ -224,9 +224,10 @@ def process_photo_group(photos: list[dict]) -> Optional[Bill]:
             temp_file.close()
             temp_files.append(Path(temp_file.name))
 
-        # Try GiroCode detection first (more reliable) - skip for PDFs
+        # Try GiroCode detection first (more reliable)
+        # Check each file individually - PDFs are skipped but images are still checked
         girocode_data = None
-        if girocode_available() and not has_pdf:
+        if girocode_available():
             for i, (file_data, mime_type) in enumerate(downloaded_files):
                 if mime_type == 'application/pdf':
                     continue  # Skip PDFs for QR code detection

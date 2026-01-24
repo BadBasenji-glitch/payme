@@ -202,35 +202,72 @@ def build_request_body(
     }
 
 
-def call_gemini_api(request_body: dict, api_key: str) -> str:
+def call_gemini_api(request_body: dict, api_key: str, max_retries: int = 3) -> str:
     """
     Call Gemini API and return response text.
 
-    Raises HttpError on API failure.
+    Uses exponential backoff for transient failures.
+
+    Args:
+        request_body: The API request body
+        api_key: Gemini API key
+        max_retries: Maximum number of retry attempts (default 3)
+
+    Raises HttpError on API failure after all retries exhausted.
     """
+    import time
+
     url = f'{GEMINI_API_BASE}/models/{GEMINI_MODEL}:generateContent?key={api_key}'
+    last_error = None
 
-    response = post_json(
-        url,
-        headers={'Content-Type': 'application/json'},
-        json=request_body,
-        timeout=60,  # Longer timeout for vision tasks
-    )
+    for attempt in range(max_retries):
+        try:
+            response = post_json(
+                url,
+                headers={'Content-Type': 'application/json'},
+                json=request_body,
+                timeout=60,  # Longer timeout for vision tasks
+            )
 
-    # Extract text from response
-    try:
-        candidates = response.get('candidates', [])
-        if not candidates:
-            raise HttpError('No response from Gemini')
+            # Extract text from response
+            candidates = response.get('candidates', [])
+            if not candidates:
+                raise HttpError('No response from Gemini')
 
-        content = candidates[0].get('content', {})
-        parts = content.get('parts', [])
-        if not parts:
-            raise HttpError('Empty response from Gemini')
+            content = candidates[0].get('content', {})
+            parts = content.get('parts', [])
+            if not parts:
+                raise HttpError('Empty response from Gemini')
 
-        return parts[0].get('text', '')
-    except (KeyError, IndexError) as e:
-        raise HttpError(f'Invalid Gemini response format: {e}')
+            return parts[0].get('text', '')
+
+        except HttpError as e:
+            last_error = e
+            # Only retry on potentially transient errors (5xx, timeouts)
+            error_str = str(e).lower()
+            is_transient = (
+                '500' in error_str or
+                '502' in error_str or
+                '503' in error_str or
+                '504' in error_str or
+                'timeout' in error_str or
+                'connection' in error_str
+            )
+
+            if is_transient and attempt < max_retries - 1:
+                # Exponential backoff: 1s, 2s, 4s
+                wait_time = 2 ** attempt
+                time.sleep(wait_time)
+                continue
+            raise
+
+        except (KeyError, IndexError) as e:
+            raise HttpError(f'Invalid Gemini response format: {e}')
+
+    # Should not reach here, but just in case
+    if last_error:
+        raise last_error
+    raise HttpError('Gemini API call failed after retries')
 
 
 def parse_gemini_response(response_text: str) -> ParsedBill:

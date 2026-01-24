@@ -372,14 +372,57 @@ def get_new_photos(folder_id: str = None) -> list[dict]:
     return new_photos
 
 
+def _within_grouping_window(prev_time: str, current_time: str) -> bool:
+    """
+    Check if two ISO timestamps are within the grouping window.
+
+    Returns True if times are within PHOTO_GROUPING_MINUTES of each other.
+    """
+    if not prev_time or not current_time:
+        return False
+
+    try:
+        # Parse ISO timestamps (handle both 'Z' suffix and '+00:00')
+        prev_dt = datetime.fromisoformat(prev_time.replace('Z', '+00:00'))
+        current_dt = datetime.fromisoformat(current_time.replace('Z', '+00:00'))
+
+        diff = abs((current_dt - prev_dt).total_seconds())
+        return diff <= PHOTO_GROUPING_MINUTES * 60
+    except (ValueError, TypeError):
+        return False
+
+
 def group_photos_by_time(photos: list[dict]) -> list[list[dict]]:
     """
-    Return each photo as its own group (grouping disabled).
-    Each photo/file is treated as a separate bill.
+    Group photos/files by creation time for multi-page bill detection.
+    Files created within PHOTO_GROUPING_MINUTES of each other are grouped.
     """
     if not photos:
         return []
-    return [[photo] for photo in photos]
+
+    # Sort by creation time
+    sorted_photos = sorted(photos, key=lambda p: p.get('creationTime', ''))
+
+    groups = []
+    current_group = [sorted_photos[0]]
+
+    for photo in sorted_photos[1:]:
+        current_time = photo.get('creationTime', '')
+        prev_time = current_group[-1].get('creationTime', '')
+
+        # Parse timestamps and check if within grouping window
+        if _within_grouping_window(prev_time, current_time):
+            current_group.append(photo)
+        else:
+            groups.append(current_group)
+            current_group = [photo]
+
+    groups.append(current_group)
+    return groups
+
+
+# Maximum file size in MB
+MAX_FILE_SIZE_MB = 20
 
 
 def download_photo(photo: dict, size: str = 'full') -> bytes:
@@ -392,6 +435,10 @@ def download_photo(photo: dict, size: str = 'full') -> bytes:
 
     Returns:
         Image bytes
+
+    Raises:
+        ValueError: If file exceeds MAX_FILE_SIZE_MB
+        HttpError: If download fails
     """
     import requests
 
@@ -400,6 +447,32 @@ def download_photo(photo: dict, size: str = 'full') -> bytes:
         raise ValueError('Photo has no id')
 
     headers = get_auth_headers()
+
+    # First check file size via metadata
+    metadata_url = f'{GOOGLE_DRIVE_API_BASE}/files/{file_id}'
+    metadata_params = {'fields': 'size,name'}
+
+    try:
+        metadata_response = requests.get(
+            metadata_url,
+            headers=headers,
+            params=metadata_params,
+            timeout=10,
+        )
+        if metadata_response.status_code == 200:
+            metadata = metadata_response.json()
+            file_size = int(metadata.get('size', 0))
+            file_name = metadata.get('name', 'unknown')
+
+            if file_size > MAX_FILE_SIZE_MB * 1024 * 1024:
+                size_mb = file_size / (1024 * 1024)
+                raise ValueError(
+                    f'File too large: {file_name} is {size_mb:.1f}MB '
+                    f'(max {MAX_FILE_SIZE_MB}MB)'
+                )
+    except requests.RequestException:
+        # If metadata check fails, proceed with download anyway
+        pass
 
     # Use alt=media to download file content
     url = f'{GOOGLE_DRIVE_API_BASE}/files/{file_id}?alt=media'
