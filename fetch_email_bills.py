@@ -99,7 +99,7 @@ def list_matching_emails(access_token: str) -> list[dict]:
 
     Returns list of {'id': ..., 'threadId': ...} dicts.
     """
-    query = f'is:unread label:{GMAIL_LABEL}'
+    query = f'label:{GMAIL_LABEL}'
 
     result = gmail_get(
         '/users/me/messages',
