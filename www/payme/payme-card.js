@@ -149,9 +149,11 @@ class PaymeCard extends HTMLElement {
         return allBills.filter(b => b.status === 'pending');
       case 'processing':
         return allBills.filter(b => ['awaiting_2fa', 'awaiting_funding', 'processing', 'insufficient_balance'].includes(b.status));
+      case 'rejected':
+        return allBills.filter(b => b.status === 'rejected');
       case 'complete':
         return allBills.filter(b =>
-          ['paid', 'rejected', 'failed'].includes(b.status) &&
+          ['paid', 'failed'].includes(b.status) &&
           this._isRecentlyCompleted(b)
         );
       case 'all':
@@ -304,8 +306,9 @@ class PaymeCard extends HTMLElement {
     const allBills = [...this._bills, ...this._history];
     const pendingCount = allBills.filter(b => b.status === 'pending').length;
     const processingCount = allBills.filter(b => ['awaiting_2fa', 'awaiting_funding', 'processing', 'insufficient_balance'].includes(b.status)).length;
+    const rejectedCount = allBills.filter(b => b.status === 'rejected').length;
     const completeCount = allBills.filter(b =>
-      ['paid', 'rejected', 'failed'].includes(b.status) &&
+      ['paid', 'failed'].includes(b.status) &&
       this._isRecentlyCompleted(b)
     ).length;
     const allCount = allBills.length;
@@ -335,6 +338,9 @@ class PaymeCard extends HTMLElement {
           </button>
           <button class="tab ${this._activeTab === 'processing' ? 'active' : ''}" data-tab="processing">
             Processing <span class="badge">${processingCount}</span>
+          </button>
+          <button class="tab ${this._activeTab === 'rejected' ? 'active' : ''}" data-tab="rejected">
+            Rejected <span class="badge">${rejectedCount}</span>
           </button>
           <button class="tab ${this._activeTab === 'complete' ? 'active' : ''}" data-tab="complete">
             Complete <span class="badge">${completeCount}</span>
@@ -373,8 +379,6 @@ class PaymeCard extends HTMLElement {
               <th>Due</th>
               <th>Vendor</th>
               <th class="align-right">Amount</th>
-              <th>Status</th>
-              <th>Paid</th>
             </tr>
           </thead>
           <tbody>
@@ -385,12 +389,9 @@ class PaymeCard extends HTMLElement {
                 <td>
                   <div class="vendor-cell">
                     <span class="vendor-name">${this._escapeHtml(bill.recipient)}</span>
-                    ${bill.description ? `<span class="vendor-desc">${this._escapeHtml(bill.description)}</span>` : ''}
                   </div>
                 </td>
                 <td class="amount align-right">${this._formatCurrency(bill.amount, bill.currency)}</td>
-                <td>${bill.status !== 'paid' ? this._getStatusBadge(bill.status) : ''}</td>
-                <td class="date-cell">${this._formatDate(bill.paid_at)}</td>
               </tr>
             `).join('')}
           </tbody>
