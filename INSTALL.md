@@ -410,7 +410,7 @@ If you want to automatically fetch bills from email (PDF attachments or email bo
 
 1. Open Gmail in your browser
 2. Go to Settings → Labels → Create new label
-3. Name it exactly: `save-to-drive`
+3. Name it exactly: `bill-pay`
 4. Apply this label to emails containing bills you want processed
 
 #### 7b. Re-authorize with Gmail Permissions
@@ -531,7 +531,7 @@ ha core restart
 | `PHOTO_GROUPING_MINUTES` | 5 | Time window for fallback grouping |
 | `CONFIDENCE_THRESHOLD` | 0.9 | Minimum OCR confidence (0-1) |
 | `WISE_API_DELAY_SECONDS` | 2 | Rate limit delay between Wise calls |
-| `GMAIL_LABEL` | save-to-drive | Gmail label to filter emails for processing |
+| `GMAIL_LABEL` | bill-pay | Gmail label to filter emails for processing |
 
 ## Usage
 
@@ -563,7 +563,7 @@ Some invoices (subscriptions, direct debit) don't include bank payment details:
 ### Email Bills
 
 For bills received via email:
-1. Apply the `save-to-drive` label to the email in Gmail
+1. Apply the `bill-pay` label to the email in Gmail
 2. Run `fetch_email_bills.py` (or wait for automation)
 3. PDF attachments are extracted and uploaded to Drive
 4. If no PDF attachment, the email body is converted to PDF

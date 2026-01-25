@@ -21,7 +21,7 @@ BIC_DB_FILE = STORAGE_PATH / 'bic_db.json'
 BIC_CACHE_FILE = STORAGE_PATH / 'bic_cache.json'
 
 # Gmail settings
-GMAIL_LABEL = 'save-to-drive'  # Label to filter emails for processing
+GMAIL_LABEL = 'bill-pay'  # Label to filter emails for processing
 
 # Constants
 POLLING_INTERVAL_MINUTES = 30
