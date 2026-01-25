@@ -14,7 +14,7 @@ Usage:
     python3 fetch_email_bills.py --status  # Show processing status
 
 Requires:
-    pip install xhtml2pdf
+    pip install fpdf2
 """
 
 import argparse
@@ -252,56 +252,70 @@ def upload_to_drive(access_token: str, folder_id: str, filename: str, file_data:
     return response.json().get('id', '')
 
 
+def strip_html_tags(html_text: str) -> str:
+    """Strip HTML tags and decode entities to plain text."""
+    import re
+    # Remove script and style elements
+    text = re.sub(r'<(script|style)[^>]*>.*?</\1>', '', html_text, flags=re.DOTALL | re.IGNORECASE)
+    # Replace br and p tags with newlines
+    text = re.sub(r'<br[^>]*>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</p>', '\n\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</div>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</tr>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</td>', '  ', text, flags=re.IGNORECASE)
+    # Remove all other tags
+    text = re.sub(r'<[^>]+>', '', text)
+    # Decode HTML entities
+    text = html.unescape(text)
+    # Clean up whitespace
+    text = re.sub(r'\n\s*\n', '\n\n', text)
+    text = re.sub(r' +', ' ', text)
+    return text.strip()
+
+
 def email_to_pdf(headers: dict, body_html: str) -> bytes:
     """
     Convert email to PDF.
 
-    Uses xhtml2pdf for pure Python PDF generation.
+    Uses fpdf2 for pure Python PDF generation (no compilation required).
     """
-    from xhtml2pdf import pisa
-    from io import BytesIO
+    from fpdf import FPDF
 
-    subject = html.escape(headers.get('subject', 'No Subject'))
-    sender = html.escape(headers.get('from', 'Unknown'))
-    date = html.escape(headers.get('date', ''))
+    subject = headers.get('subject', 'No Subject')
+    sender = headers.get('from', 'Unknown')
+    date = headers.get('date', '')
 
-    # Wrap body in a complete HTML document
-    html_content = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <style>
-        body {{ font-family: Arial, sans-serif; margin: 20px; }}
-        .header {{ background: #f5f5f5; padding: 15px; margin-bottom: 20px; }}
-        .header h2 {{ margin: 0 0 10px 0; }}
-        .meta {{ color: #666; font-size: 0.9em; }}
-        .body {{ line-height: 1.5; }}
-        hr {{ border: none; border-top: 1px solid #ddd; margin: 20px 0; }}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h2>{subject}</h2>
-        <div class="meta">
-            <strong>From:</strong> {sender}<br>
-            <strong>Date:</strong> {date}
-        </div>
-    </div>
-    <hr>
-    <div class="body">
-        {body_html}
-    </div>
-</body>
-</html>"""
+    # Strip HTML to plain text
+    body_text = strip_html_tags(body_html)
 
-    # Convert to PDF
-    output = BytesIO()
-    pisa_status = pisa.CreatePDF(html_content, dest=output)
+    # Create PDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
 
-    if pisa_status.err:
-        raise ValueError(f'PDF generation failed: {pisa_status.err}')
+    # Use built-in font that supports basic characters
+    pdf.set_font('Helvetica', 'B', 16)
+    pdf.multi_cell(0, 10, subject)
 
-    return output.getvalue()
+    pdf.set_font('Helvetica', '', 10)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 6, f'From: {sender}', new_x='LMARGIN', new_y='NEXT')
+    pdf.cell(0, 6, f'Date: {date}', new_x='LMARGIN', new_y='NEXT')
+
+    pdf.ln(5)
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(5)
+
+    # Body text
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font('Helvetica', '', 11)
+
+    # Handle encoding issues - replace problematic characters
+    body_text = body_text.encode('latin-1', errors='replace').decode('latin-1')
+    pdf.multi_cell(0, 6, body_text)
+
+    return pdf.output()
 
 
 def sanitize_filename(name: str) -> str:

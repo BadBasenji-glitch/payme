@@ -430,7 +430,7 @@ python3 authorize_google.py /path/to/client_secret.json --manual
 #### 7c. Install Email Dependencies
 
 ```bash
-pip install xhtml2pdf
+pip install fpdf2
 ```
 
 #### 7d. Test Email Fetching
