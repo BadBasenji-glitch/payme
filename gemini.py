@@ -50,6 +50,18 @@ Important:
 
 Return ONLY the JSON object, no other text.'''
 
+QUICK_EXTRACT_PROMPT = '''Quickly extract the key identification fields from this bill/invoice.
+
+Return a JSON object with ONLY these fields:
+{
+  "iban": "IBAN bank account number or null if not visible",
+  "invoice_number": "Invoice number or null if not visible",
+  "amount": 123.45,
+  "recipient": "Company name"
+}
+
+Return ONLY the JSON object, no other text.'''
+
 MULTI_PAGE_PROMPT = '''These images are pages from the same bill/invoice. Analyze all pages together and extract the complete payment details.
 
 Return a JSON object with these fields:
@@ -76,6 +88,24 @@ Return a JSON object with these fields:
 The payment details (IBAN, amount) are often on the last page or payment slip.
 Provide a helpful English translation of the bill content for non-German speakers.
 Return ONLY the JSON object, no other text.'''
+
+
+@dataclass
+class QuickExtract:
+    """Lightweight bill identification data for grouping."""
+    iban: str = ''
+    invoice_number: str = ''
+    amount: float = 0.0
+    recipient: str = ''
+
+    def grouping_key(self) -> tuple:
+        """Return a key for grouping related bills."""
+        # Normalize for comparison
+        iban = self.iban.replace(' ', '').upper() if self.iban else ''
+        invoice = self.invoice_number.strip().upper() if self.invoice_number else ''
+        # Round amount to avoid floating point issues
+        amount = round(self.amount, 2) if self.amount else 0.0
+        return (iban, invoice, amount)
 
 
 @dataclass
@@ -422,6 +452,63 @@ def parse_bill_bytes(
 
     response_text = call_gemini_api(request_body, api_key)
     return parse_gemini_response(response_text)
+
+
+def quick_extract_bytes(
+    image_data: bytes,
+    mime_type: str = 'image/jpeg',
+    api_key: str = None,
+) -> QuickExtract:
+    """
+    Quickly extract key identification fields from a bill image.
+
+    This is a lightweight extraction for grouping purposes - just gets
+    IBAN, invoice number, amount, and recipient.
+
+    Args:
+        image_data: Raw image bytes
+        mime_type: Image MIME type
+        api_key: Optional API key
+
+    Returns:
+        QuickExtract with key fields
+    """
+    if api_key is None:
+        api_key = get_api_key()
+
+    base64_data = encode_image_bytes(image_data, mime_type)
+
+    request_body = build_request_body(
+        images=[(base64_data, mime_type)],
+        prompt=QUICK_EXTRACT_PROMPT,
+    )
+
+    response_text = call_gemini_api(request_body, api_key)
+
+    result = QuickExtract()
+
+    # Try to extract JSON from response
+    json_match = re.search(r'\{[\s\S]*\}', response_text)
+    if not json_match:
+        return result
+
+    try:
+        data = json.loads(json_match.group())
+    except json.JSONDecodeError:
+        return result
+
+    result.iban = str(data.get('iban', '') or '').replace(' ', '').upper()
+    result.invoice_number = str(data.get('invoice_number', '') or '')
+    result.recipient = str(data.get('recipient', '') or '')
+
+    amount = data.get('amount')
+    if amount is not None:
+        try:
+            result.amount = float(amount)
+        except (ValueError, TypeError):
+            result.amount = 0.0
+
+    return result
 
 
 if __name__ == '__main__':

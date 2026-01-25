@@ -26,7 +26,7 @@ from formatting import format_currency, format_iban
 from iban import validate_iban, get_iban_info
 from dedup import is_duplicate, record_payment, check_similar
 from girocode import extract_girocode, extract_girocode_from_bytes, check_dependencies as girocode_available
-from gemini import parse_bill_image, parse_bill_images, parse_bill_bytes, ParsedBill
+from gemini import parse_bill_image, parse_bill_images, parse_bill_bytes, quick_extract_bytes, ParsedBill
 from google_drive import (
     get_new_photos,
     group_photos_by_time,
@@ -336,6 +336,53 @@ def process_photo_group(photos: list[dict]) -> Optional[Bill]:
                 pass
 
 
+def group_photos_by_content(photos: list[dict]) -> list[list[dict]]:
+    """
+    Group photos by their actual content (IBAN, invoice number, amount).
+
+    This is smarter than time-based grouping - it only groups photos that
+    are actually from the same bill (matching IBAN + invoice + amount).
+
+    Args:
+        photos: List of photo dicts with id, filename, mimeType
+
+    Returns:
+        List of photo groups, where each group is a list of related photos
+    """
+    if not photos:
+        return []
+
+    # Download and quick-extract each photo
+    photo_data = []
+    for photo in photos:
+        try:
+            file_data = download_photo(photo, size='large')
+            mime_type = photo.get('mimeType', 'image/jpeg')
+            extract = quick_extract_bytes(file_data, mime_type)
+            photo_data.append({
+                'photo': photo,
+                'extract': extract,
+                'key': extract.grouping_key(),
+            })
+        except Exception as e:
+            # If extraction fails, treat as its own group
+            photo_data.append({
+                'photo': photo,
+                'extract': None,
+                'key': (photo['id'],),  # Unique key so it's its own group
+            })
+
+    # Group by matching keys
+    groups_dict = {}
+    for item in photo_data:
+        key = item['key']
+        if key not in groups_dict:
+            groups_dict[key] = []
+        groups_dict[key].append(item['photo'])
+
+    return list(groups_dict.values())
+
+
 def poll_for_new_bills() -> PollResult:
     """
     Main poll function - check for new photos and create pending bills.
@@ -369,8 +416,9 @@ def poll_for_new_bills() -> PollResult:
     if not new_photos:
         return result
 
-    # Group photos by time (multi-page bills)
-    photo_groups = group_photos_by_time(new_photos)
+    # Group photos by content (IBAN, invoice number, amount)
+    # This is smarter than time-based grouping - only groups truly related photos
+    photo_groups = group_photos_by_content(new_photos)
 
     # Process each group
     pending_bills = load_pending_bills()
