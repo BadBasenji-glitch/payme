@@ -279,22 +279,27 @@ def process_photo_group(photos: list[dict]) -> Optional[Bill]:
         # Validate IBAN
         iban_info = get_iban_info(iban)
         if not iban_info['valid']:
-            raise ValueError(f"Invalid IBAN: {iban_info['error']}")
+            # Allow bills without IBAN - mark them clearly
+            recipient = f"{recipient} - NO IBAN"
+            iban = ''
+            bic = ''
+            bank_name = 'No bank details'
+            duplicate_warning = False
+        else:
+            # Get bank name
+            bank_name = iban_info['bank']['name']
+            if not bic:
+                bic = iban_info['bank']['bic']
 
-        # Get bank name
-        bank_name = iban_info['bank']['name']
-        if not bic:
-            bic = iban_info['bank']['bic']
+            # Check for duplicates (only if we have an IBAN)
+            is_dup, dup_info = is_duplicate(iban, amount, reference)
+            duplicate_warning = is_dup
 
-        # Check for duplicates
-        is_dup, dup_info = is_duplicate(iban, amount, reference)
-        duplicate_warning = is_dup
-
-        # Check for similar payments
-        if not duplicate_warning:
-            similar = check_similar(iban, amount)
-            if similar:
-                duplicate_warning = True
+            # Check for similar payments
+            if not duplicate_warning:
+                similar = check_similar(iban, amount)
+                if similar:
+                    duplicate_warning = True
 
         # Create bill
         bill = Bill(
