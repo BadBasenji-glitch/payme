@@ -176,6 +176,7 @@ Automated bill payment system for Home Assistant. Photograph bills, add to a Goo
 │       ├── notify.py              # HA notifications
 │       ├── poll.py                # Main orchestrator (CLI entry point)
 │       ├── authorize_google.py    # One-time OAuth setup
+│       ├── fetch_email_bills.py   # Gmail bill fetching
 │       └── update_bic_db.py       # BIC database updater
 │
 ├── pyscript/
@@ -194,6 +195,7 @@ Automated bill payment system for Home Assistant. Photograph bills, add to a Goo
         ├── google_tokens.json     # OAuth tokens (auto-refreshed)
         ├── album_cache.json       # Album ID cache
         ├── processed_photos.json  # Processed photo IDs
+        ├── processed_emails.json  # Processed Gmail message IDs
         ├── payment_hashes.json    # Duplicate detection hashes
         ├── payment_history.json   # Payment history
         ├── bic_db.json            # Bundesbank BIC database
@@ -400,7 +402,71 @@ python3 authorize_google.py
 6. Follow the prompts to authorize in your browser
 7. Tokens are saved to `/config/.storage/payme/google_tokens.json`
 
-### Step 7: Initialize BIC Database
+### Step 7: Gmail Integration (Optional)
+
+If you want to automatically fetch bills from email (PDF attachments or email body converted to PDF):
+
+#### 7a. Create Gmail Label
+
+1. Open Gmail in your browser
+2. Go to Settings → Labels → Create new label
+3. Name it exactly: `save-to-drive`
+4. Apply this label to emails containing bills you want processed
+
+#### 7b. Re-authorize with Gmail Permissions
+
+If you already completed Step 6, you need to re-authorize to add Gmail scopes:
+
+```bash
+cd /config/scripts/payme
+
+# Delete old tokens
+rm /config/.storage/payme/google_tokens.json
+
+# Re-run authorization (now includes Gmail scopes)
+python3 authorize_google.py /path/to/client_secret.json --manual
+```
+
+#### 7c. Install Email Dependencies
+
+```bash
+pip install xhtml2pdf
+```
+
+#### 7d. Test Email Fetching
+
+```bash
+cd /config/scripts/payme
+
+# Dry run to see what would be processed
+python3 fetch_email_bills.py --dry-run
+
+# Process emails
+python3 fetch_email_bills.py
+
+# Check status
+python3 fetch_email_bills.py --status
+```
+
+#### 7e. Automate Email Fetching (Optional)
+
+Add to your Home Assistant automations or cron:
+
+```yaml
+# Example automation
+automation:
+  - alias: "Payme: Fetch email bills"
+    trigger:
+      - platform: time_pattern
+        hours: "/6"  # Every 6 hours
+    action:
+      - service: shell_command.payme_fetch_emails
+
+shell_command:
+  payme_fetch_emails: "cd /config/scripts/payme && python3 fetch_email_bills.py"
+```
+
+### Step 8: Initialize BIC Database
 
 ```bash
 cd /config/scripts/payme
@@ -409,13 +475,13 @@ python3 update_bic_db.py
 
 This downloads the Deutsche Bundesbank BLZ database for German bank lookups.
 
-### Step 8: Create Google Drive Folder
+### Step 9: Create Google Drive Folder
 
 1. Open Google Drive on your phone or computer
 2. Create a new folder named exactly: `bill-pay`
 3. This is where you'll add bill photos
 
-### Step 9: Add Dashboard Card
+### Step 10: Add Dashboard Card
 
 Add to your Lovelace dashboard:
 
@@ -437,7 +503,7 @@ Or via UI:
 type: custom:payme-card
 ```
 
-### Step 10: Restart Home Assistant
+### Step 11: Restart Home Assistant
 
 ```bash
 ha core restart
@@ -462,9 +528,10 @@ ha core restart
 |----------|---------|-------------|
 | `POLLING_INTERVAL_MINUTES` | 30 | How often to check for new photos |
 | `DUPLICATE_WINDOW_DAYS` | 90 | Days to check for duplicate payments |
-| `PHOTO_GROUPING_MINUTES` | 5 | Window to group multi-page bills |
+| `PHOTO_GROUPING_MINUTES` | 5 | Time window for fallback grouping |
 | `CONFIDENCE_THRESHOLD` | 0.9 | Minimum OCR confidence (0-1) |
 | `WISE_API_DELAY_SECONDS` | 2 | Rate limit delay between Wise calls |
+| `GMAIL_LABEL` | save-to-drive | Gmail label to filter emails for processing |
 
 ## Usage
 
@@ -480,9 +547,27 @@ ha core restart
 ### Multi-Page Bills
 
 For bills spanning multiple pages:
-1. Take photos of all pages within 5 minutes
+1. Take photos of all pages
 2. Add all photos to the folder
-3. payme will automatically group and analyze them together
+3. payme uses **smart grouping** - photos are grouped by matching IBAN, invoice number, and amount (not just upload time)
+4. This means you can upload multiple different bills at once and they'll be correctly separated
+
+### Bills Without IBAN
+
+Some invoices (subscriptions, direct debit) don't include bank payment details:
+- payme still creates a bill record for tracking
+- Recipient name is marked with "- NO IBAN"
+- These bills appear in your dashboard but cannot be paid via Wise
+- Useful for tracking recurring payments that are auto-debited
+
+### Email Bills
+
+For bills received via email:
+1. Apply the `save-to-drive` label to the email in Gmail
+2. Run `fetch_email_bills.py` (or wait for automation)
+3. PDF attachments are extracted and uploaded to Drive
+4. If no PDF attachment, the email body is converted to PDF
+5. payme then processes these like any other bill
 
 ### Dashboard Features
 

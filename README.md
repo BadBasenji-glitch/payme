@@ -33,7 +33,9 @@ Automated bill payment for Home Assistant. Photograph a bill, add it to a Google
 - **Duplicate Detection**: Blocks repeat payments within 90 days
 - **IBAN Validation**: Full checksum verification (ISO 7064)
 - **Bank Name Lookup**: Deutsche Bundesbank database integration
-- **Multi-page Bills**: Photos taken within 5 minutes auto-grouped
+- **Smart Multi-page Grouping**: Photos grouped by matching IBAN/invoice/amount (not just time)
+- **Bills Without IBAN**: Invoices without bank details still tracked (marked "NO IBAN")
+- **Gmail Integration**: Auto-fetch PDF bills from labeled emails
 - **Balance Awareness**: Dashboard shows if you can pay pending bills
 - **Mobile Notifications**: Actionable approve/reject from your phone
 
@@ -94,6 +96,7 @@ The install script handles directories, file copying, dependencies, and configur
 │   ├── girocode.py          # QR code parsing
 │   ├── wise.py              # Payment API
 │   ├── google_drive.py      # Drive API client
+│   ├── fetch_email_bills.py # Gmail bill fetching
 │   ├── iban.py              # IBAN validation
 │   ├── dedup.py             # Duplicate detection
 │   ├── notify.py            # HA notifications
