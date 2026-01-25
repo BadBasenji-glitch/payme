@@ -21,9 +21,10 @@ import argparse
 import base64
 import html
 import json
+import logging
 import sys
-import tempfile
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -36,6 +37,9 @@ from config import (
 from storage import load_json, save_json
 from google_drive import get_valid_access_token, get_album_id
 from http_client import get_json, post_json, HttpError
+
+# Configure logging
+log = logging.getLogger('payme.email')
 
 # Gmail API base
 GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1'
@@ -351,7 +355,7 @@ def process_email(access_token: str, folder_id: str, message_id: str, dry_run: b
                 pdf_data = get_attachment(access_token, message_id, att['attachment_id'])
                 file_id = upload_to_drive(access_token, folder_id, att['filename'], pdf_data)
                 result['uploaded'].append(att['filename'])
-                print(f"  Uploaded attachment: {att['filename']}")
+                log.info(f"Uploaded attachment: {att['filename']}")
         else:
             # Convert email body to PDF
             body_html = extract_body(payload)
@@ -361,7 +365,7 @@ def process_email(access_token: str, folder_id: str, message_id: str, dry_run: b
                 file_id = upload_to_drive(access_token, folder_id, filename, pdf_data)
                 result['body_pdf'] = True
                 result['uploaded'].append(filename)
-                print(f"  Uploaded email as PDF: {filename}")
+                log.info(f"Uploaded email as PDF: {filename}")
 
         # Mark as read
         mark_as_read(access_token, message_id)
@@ -371,7 +375,7 @@ def process_email(access_token: str, folder_id: str, message_id: str, dry_run: b
 
     except Exception as e:
         result['error'] = str(e)
-        print(f"  Error: {e}")
+        log.error(f"Error processing email: {e}")
 
     return result
 
@@ -393,39 +397,42 @@ def fetch_email_bills(dry_run: bool = False) -> dict:
     }
 
     # Get access token
-    print('Getting access token...')
+    log.debug('Getting access token...')
     try:
         access_token = get_valid_access_token()
     except HttpError as e:
+        log.error(f'Auth failed: {e}')
         summary['errors'].append(f'Auth failed: {e}')
         return summary
 
     # Get Drive folder ID
-    print('Getting Drive folder ID...')
+    log.debug('Getting Drive folder ID...')
     try:
         folder_id = get_album_id()
     except Exception as e:
+        log.error(f'Failed to get folder ID: {e}')
         summary['errors'].append(f'Failed to get folder ID: {e}')
         return summary
 
-    print(f'Using Drive folder: {folder_id}')
+    log.info(f'Using Drive folder: {folder_id}')
 
     # Get already processed emails
     processed = get_processed_emails()
 
     # List matching emails
-    print(f'Searching for emails with label: {GMAIL_LABEL}')
+    log.info(f'Searching for emails with label: {GMAIL_LABEL}')
     try:
         emails = list_matching_emails(access_token)
     except HttpError as e:
+        log.error(f'Gmail search failed: {e}')
         summary['errors'].append(f'Gmail search failed: {e}')
         return summary
 
     summary['emails_found'] = len(emails)
-    print(f'Found {len(emails)} matching emails')
+    log.info(f'Found {len(emails)} matching emails')
 
     if dry_run:
-        print('\n--- DRY RUN MODE ---\n')
+        log.info('--- DRY RUN MODE ---')
 
     # Process each email
     for email in emails:
@@ -433,11 +440,11 @@ def fetch_email_bills(dry_run: bool = False) -> dict:
 
         # Skip already processed
         if email_id in processed:
-            print(f'Skipping already processed: {email_id}')
+            log.debug(f'Skipping already processed: {email_id}')
             summary['emails_skipped'] += 1
             continue
 
-        print(f'\nProcessing email: {email_id}')
+        log.info(f'Processing email: {email_id}')
         result = process_email(access_token, folder_id, email_id, dry_run=dry_run)
 
         if result['error']:
@@ -447,8 +454,8 @@ def fetch_email_bills(dry_run: bool = False) -> dict:
             summary['files_uploaded'] += len(result['uploaded'])
 
             if dry_run:
-                print(f"  Subject: {result['subject']}")
-                print(f"  Would upload: {', '.join(result['uploaded'])}")
+                log.info(f"Subject: {result['subject']}")
+                log.info(f"Would upload: {', '.join(result['uploaded'])}")
 
     return summary
 
@@ -456,12 +463,22 @@ def fetch_email_bills(dry_run: bool = False) -> dict:
 def show_status():
     """Show current processing status."""
     processed = get_processed_emails()
-    print(f'Processed emails: {len(processed)}')
+    log.info(f'Processed emails: {len(processed)}')
 
     if processed:
-        print('\nRecent processed IDs:')
+        log.info('Recent processed IDs:')
         for email_id in list(processed)[-10:]:
-            print(f'  {email_id}')
+            log.info(f'  {email_id}')
+
+
+def setup_logging(verbose: bool = False):
+    """Configure logging for the script."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+    )
 
 
 def main():
@@ -493,31 +510,39 @@ The script will:
         action='store_true',
         help='Show processing status',
     )
+    parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Enable verbose/debug logging',
+    )
 
     args = parser.parse_args()
+
+    # Set up logging
+    setup_logging(verbose=args.verbose)
 
     if args.status:
         show_status()
         return
 
-    print('='*50)
-    print('payme Email Bill Fetcher')
-    print('='*50)
+    log.info('=' * 50)
+    log.info('payme Email Bill Fetcher')
+    log.info('=' * 50)
 
     summary = fetch_email_bills(dry_run=args.dry_run)
 
-    print('\n' + '='*50)
-    print('Summary')
-    print('='*50)
-    print(f"Emails found:     {summary['emails_found']}")
-    print(f"Emails processed: {summary['emails_processed']}")
-    print(f"Emails skipped:   {summary['emails_skipped']}")
-    print(f"Files uploaded:   {summary['files_uploaded']}")
+    log.info('=' * 50)
+    log.info('Summary')
+    log.info('=' * 50)
+    log.info(f"Emails found:     {summary['emails_found']}")
+    log.info(f"Emails processed: {summary['emails_processed']}")
+    log.info(f"Emails skipped:   {summary['emails_skipped']}")
+    log.info(f"Files uploaded:   {summary['files_uploaded']}")
 
     if summary['errors']:
-        print(f"\nErrors ({len(summary['errors'])}):")
+        log.error(f"Errors ({len(summary['errors'])}):")
         for error in summary['errors']:
-            print(f"  - {error}")
+            log.error(f"  - {error}")
         sys.exit(1)
 
     print('\nDone!')
