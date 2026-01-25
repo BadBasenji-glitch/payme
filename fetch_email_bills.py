@@ -3,7 +3,7 @@
 Fetch bills from Gmail and upload to Google Drive for payme processing.
 
 This script:
-1. Searches Gmail for emails with the configured label (default: 'bill-pay')
+1. Searches Gmail for emails with the configured label (default: 'bill-pay-HA')
 2. Extracts PDF attachments and uploads them to the payme Drive folder
 3. Converts email body to PDF and uploads (for emails without PDF attachments)
 4. Marks processed emails as read

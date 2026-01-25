@@ -410,7 +410,7 @@ If you want to automatically fetch bills from email (PDF attachments or email bo
 
 1. Open Gmail in your browser
 2. Go to Settings → Labels → Create new label
-3. Name it exactly: `bill-pay`
+3. Name it exactly: `bill-pay-HA`
 4. Apply this label to emails containing bills you want processed
 
 #### 7b. Re-authorize with Gmail Permissions
@@ -478,7 +478,7 @@ This downloads the Deutsche Bundesbank BLZ database for German bank lookups.
 ### Step 9: Create Google Drive Folder
 
 1. Open Google Drive on your phone or computer
-2. Create a new folder named exactly: `bill-pay`
+2. Create a new folder named exactly: `bill-pay-HA`
 3. This is where you'll add bill photos
 
 ### Step 10: Add Dashboard Card
@@ -563,7 +563,7 @@ Some invoices (subscriptions, direct debit) don't include bank payment details:
 ### Email Bills
 
 For bills received via email:
-1. Apply the `bill-pay` label to the email in Gmail
+1. Apply the `bill-pay-HA` label to the email in Gmail
 2. Run `fetch_email_bills.py` (or wait for automation)
 3. PDF attachments are extracted and uploaded to Drive
 4. If no PDF attachment, the email body is converted to PDF
