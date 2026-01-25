@@ -30,9 +30,12 @@ from http_client import post_json, HttpError
 GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 
-# Scopes for read-only Drive access
+# Scopes for Drive and Gmail access
 SCOPES = [
-    'https://www.googleapis.com/auth/drive.readonly',
+    'https://www.googleapis.com/auth/drive.readonly',  # Read files from Drive
+    'https://www.googleapis.com/auth/drive.file',      # Upload files to Drive
+    'https://www.googleapis.com/auth/gmail.readonly',  # Read Gmail messages
+    'https://www.googleapis.com/auth/gmail.modify',    # Mark messages as read
 ]
 
 # Local callback server

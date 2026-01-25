@@ -14,10 +14,14 @@ SCRIPTS_PATH = HA_CONFIG_PATH / 'scripts' / 'payme'
 GOOGLE_TOKENS_FILE = STORAGE_PATH / 'google_tokens.json'
 ALBUM_CACHE_FILE = STORAGE_PATH / 'album_cache.json'
 PROCESSED_PHOTOS_FILE = STORAGE_PATH / 'processed_photos.json'
+PROCESSED_EMAILS_FILE = STORAGE_PATH / 'processed_emails.json'
 PAYMENT_HASHES_FILE = STORAGE_PATH / 'payment_hashes.json'
 PAYMENT_HISTORY_FILE = STORAGE_PATH / 'payment_history.json'
 BIC_DB_FILE = STORAGE_PATH / 'bic_db.json'
 BIC_CACHE_FILE = STORAGE_PATH / 'bic_cache.json'
+
+# Gmail settings
+GMAIL_LABEL = 'save-to-drive'  # Label to filter emails for processing
 
 # Constants
 POLLING_INTERVAL_MINUTES = 30
