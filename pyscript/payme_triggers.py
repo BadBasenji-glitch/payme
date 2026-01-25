@@ -224,25 +224,42 @@ def update_entities_from_status():
 # Time Triggers
 # =============================================================================
 
+def _update_last_poll(success: bool, bills_found: int, errors: list = None):
+    """Update last poll status entity using state.set directly."""
+    from datetime import datetime
+    now = datetime.now().isoformat()
+    state.set(
+        'sensor.payme_last_poll',
+        now,
+        new_attributes={
+            'success': success,
+            'bills_found': bills_found,
+            'errors': json.dumps(errors or []),
+            'error_count': len(errors or []),
+            'friendly_name': 'Last Poll',
+            'icon': 'mdi:update',
+            'device_class': 'timestamp',
+        }
+    )
+
+
 @time_trigger('cron(*/30 * * * *)')
 def payme_scheduled_poll():
     """Poll for new bills every 30 minutes."""
     log.info('payme: Starting scheduled poll')
 
-    from payme import update_last_poll
-
     result = run_script('poll')
 
     if result['success']:
         data = result.get('data', {})
-        update_last_poll(
+        _update_last_poll(
             success=True,
             bills_found=data.get('bills_created', 0),
             errors=data.get('errors', []),
         )
         log.info(f"payme: Poll complete - {data.get('bills_created', 0)} new bills")
     else:
-        update_last_poll(
+        _update_last_poll(
             success=False,
             bills_found=0,
             errors=[result.get('error', 'Unknown error')],
@@ -261,9 +278,7 @@ def payme_daily_maintenance():
     # Update entities
     update_entities_from_status()
 
-    # Check Google auth
-    from payme import update_google_auth_status
-
+    # Check Google auth status from the status call
     result = run_script('status')
     if result['success'] and result['data']:
         auth = result['data'].get('auth_status', {})
@@ -594,20 +609,50 @@ def payme_startup():
     log.info('payme: Initializing on startup')
 
     try:
-        # Create initial entity states
-        from payme import (
-            update_pending_bills,
-            update_wise_balance,
-            update_google_auth_status,
-            update_awaiting_2fa,
-            update_last_poll,
+        # Set initial placeholder states using state.set directly
+        state.set(
+            'sensor.payme_pending_bills',
+            0,
+            new_attributes={
+                'bills': '[]',
+                'count': 0,
+                'total_amount': 0,
+                'friendly_name': 'Pending Bills',
+                'icon': 'mdi:file-document-multiple',
+                'unit_of_measurement': 'bills',
+            }
         )
-
-        # Set initial states
-        update_pending_bills([])
-        update_wise_balance(0.0)
-        update_google_auth_status('unknown', message='Not yet checked')
-        update_awaiting_2fa([])
+        state.set(
+            'sensor.payme_wise_balance',
+            0.0,
+            new_attributes={
+                'currency': 'EUR',
+                'friendly_name': 'Wise Balance',
+                'icon': 'mdi:cash',
+                'unit_of_measurement': 'EUR',
+                'device_class': 'monetary',
+            }
+        )
+        state.set(
+            'sensor.payme_google_auth_status',
+            'unknown',
+            new_attributes={
+                'expires_at': '',
+                'message': 'Not yet checked',
+                'friendly_name': 'Google Auth Status',
+                'icon': 'mdi:help-circle',
+            }
+        )
+        state.set(
+            'sensor.payme_awaiting_wise_2fa',
+            0,
+            new_attributes={
+                'transfers': '[]',
+                'count': 0,
+                'friendly_name': 'Awaiting Wise 2FA',
+                'icon': 'mdi:two-factor-authentication',
+            }
+        )
 
         # Fetch actual status - wait a bit for all services to be ready
         task.sleep(10)
