@@ -17,6 +17,28 @@ from pathlib import Path
 
 # Path to payme scripts
 SCRIPTS_PATH = '/config/scripts/payme'
+LOG_FILE = Path('/config/.storage/payme/payme.log')
+
+
+def file_log(message: str):
+    """Write a log message to both pyscript log and file."""
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    line = f'{timestamp} {message}\n'
+
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(LOG_FILE, 'a') as f:
+            f.write(line)
+
+        # Keep log file from growing too large (keep last 1000 lines)
+        if LOG_FILE.stat().st_size > 500000:  # 500KB
+            lines = LOG_FILE.read_text().splitlines()[-1000:]
+            LOG_FILE.write_text('\n'.join(lines) + '\n')
+    except Exception:
+        pass  # Don't fail if logging fails
+
+    # Also log to pyscript's logger
+    log.info(f'payme: {message}')
 
 
 def _parse_secrets_yaml(content: str) -> dict:
@@ -58,14 +80,23 @@ def get_script_env():
     env = dict(os.environ)
 
     secrets_path = Path('/config/secrets.yaml')
+    file_log(f'Loading secrets from {secrets_path}, exists: {secrets_path.exists()}')
+
     if secrets_path.exists():
         try:
-            secrets = _parse_secrets_yaml(secrets_path.read_text())
+            content = secrets_path.read_text()
+            secrets = _parse_secrets_yaml(content)
+            file_log(f'Parsed {len(secrets)} secrets, keys: {list(secrets.keys())[:10]}')
+
             for secret_key, env_key in _SECRETS_TO_ENV.items():
                 if secret_key in secrets:
-                    env[env_key] = str(secrets[secret_key])
+                    value = str(secrets[secret_key])
+                    env[env_key] = value
+                    file_log(f'Set {env_key} = {value[:4]}***')
+                else:
+                    file_log(f'WARNING: Secret {secret_key} not found in secrets.yaml')
         except Exception as e:
-            log.error(f'payme: Failed to read secrets: {e}')
+            file_log(f'ERROR: Failed to read secrets: {e}')
 
     return env
 
@@ -77,6 +108,7 @@ def run_script(command: str, *args) -> dict:
     Returns dict with success, output, and error.
     """
     cmd = ['python3', f'{SCRIPTS_PATH}/poll.py', command] + list(args)
+    file_log(f'Running: {command} {" ".join(args)}')
 
     try:
         result = subprocess.run(
@@ -96,6 +128,11 @@ def run_script(command: str, *args) -> dict:
         except json.JSONDecodeError:
             data = {'raw_output': output}
 
+        if result.returncode != 0:
+            file_log(f'ERROR: {command} failed: {result.stderr.strip()}')
+        else:
+            file_log(f'OK: {command} completed')
+
         return {
             'success': result.returncode == 0,
             'data': data,
@@ -103,12 +140,14 @@ def run_script(command: str, *args) -> dict:
         }
 
     except subprocess.TimeoutExpired:
+        file_log(f'ERROR: {command} timed out after 120s')
         return {
             'success': False,
             'data': None,
             'error': 'Script timeout',
         }
     except Exception as e:
+        file_log(f'ERROR: {command} exception: {e}')
         return {
             'success': False,
             'data': None,
@@ -513,6 +552,29 @@ def payme_set_transfer_id(bill_id: str, transfer_id: int):
 
 
 @service
+def payme_view_log(lines: int = 50):
+    """
+    View recent payme log entries.
+
+    Call via:
+        service: pyscript.payme_view_log
+        data:
+            lines: 50  # optional, default 50
+    """
+    try:
+        if LOG_FILE.exists():
+            content = LOG_FILE.read_text().splitlines()
+            recent = content[-lines:] if len(content) > lines else content
+            log.info(f'payme: === LAST {len(recent)} LOG ENTRIES ===')
+            for line in recent:
+                log.info(f'payme: {line}')
+        else:
+            log.info('payme: No log file found')
+    except Exception as e:
+        log.error(f'payme: Failed to read log: {e}')
+
+
+@service
 def payme_check_transfers():
     """
     Check Wise transfer statuses and update bills.
@@ -522,7 +584,7 @@ def payme_check_transfers():
     Checks bills in 'awaiting_funding', 'awaiting_2fa', or 'processing' status
     and updates them based on Wise transfer status.
     """
-    log.info('payme: Checking transfer statuses')
+    file_log('Checking transfer statuses')
 
     result = run_script('check-transfers')
 
@@ -603,12 +665,37 @@ def handle_ios_notification_action(**kwargs):
 # Startup
 # =============================================================================
 
+def install_dependencies():
+    """Install required Python packages if missing."""
+    packages = ['requests', 'Pillow', 'fpdf2']
+    file_log('Installing dependencies...')
+
+    for package in packages:
+        try:
+            result = subprocess.run(
+                ['pip3', 'install', '--quiet', package],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result.returncode == 0:
+                file_log(f'Installed {package}')
+            else:
+                file_log(f'WARNING: Failed to install {package}: {result.stderr}')
+        except Exception as e:
+            file_log(f'WARNING: Error installing {package}: {e}')
+
+    file_log('Dependencies installation complete')
+
+
 @state_trigger("homeassistant.state == 'running'")
 def payme_startup():
     """Initialize payme on Home Assistant startup."""
-    log.info('payme: Initializing on startup')
+    file_log('=== PAYME STARTUP ===')
 
     try:
+        # Install dependencies first (they get lost on reboot)
+        install_dependencies()
         # Set initial placeholder states using state.set directly
         state.set(
             'sensor.payme_pending_bills',
