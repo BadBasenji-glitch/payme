@@ -37,8 +37,11 @@ def file_log(message: str):
     except Exception:
         pass  # Don't fail if logging fails
 
-    # Also log to pyscript's logger
-    log.info(f'payme: {message}')
+    # Also log to pyscript's logger (may not be available in all contexts)
+    try:
+        log.info(f'payme: {message}')
+    except NameError:
+        pass  # log not available outside pyscript context
 
 
 def _parse_secrets_yaml(content: str) -> dict:
