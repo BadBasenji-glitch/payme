@@ -1,29 +1,15 @@
 #!/usr/bin/env python3
 """Interactive script to manage processed bills."""
 
-import json
-from pathlib import Path
 from datetime import datetime, timedelta
 
-STORAGE_PATH = Path('/config/.storage/payme')
-HISTORY_FILE = STORAGE_PATH / 'payment_history.json'
-PROCESSED_PHOTOS_FILE = STORAGE_PATH / 'processed_photos.json'
-PROCESSED_EMAILS_FILE = STORAGE_PATH / 'processed_emails.json'
-
-
-def load_json(path):
-    if path.exists():
-        return json.loads(path.read_text())
-    return {}
-
-
-def save_json(path, data):
-    path.write_text(json.dumps(data, indent=2))
+from config import PAYMENT_HISTORY_FILE, PROCESSED_PHOTOS_FILE, PROCESSED_EMAILS_FILE
+from storage import load_json, save_json
 
 
 def get_bills_in_range(days):
     """Get all bills created within the last N days."""
-    data = load_json(HISTORY_FILE)
+    data = load_json(PAYMENT_HISTORY_FILE, {})
     cutoff = (datetime.now() - timedelta(days=days)).isoformat()
 
     bills = []
@@ -61,7 +47,7 @@ def display_bills(bills):
 
 def delete_bills(bills, indices):
     """Delete bills by their indices."""
-    data = load_json(HISTORY_FILE)
+    data = load_json(PAYMENT_HISTORY_FILE, {})
 
     to_delete = [bills[i] for i in indices]
     deleted_ids = {b.get('id') for b in to_delete}
@@ -69,7 +55,7 @@ def delete_bills(bills, indices):
     data['pending'] = [b for b in data.get('pending', []) if b.get('id') not in deleted_ids]
     data['history'] = [b for b in data.get('history', []) if b.get('id') not in deleted_ids]
 
-    save_json(HISTORY_FILE, data)
+    save_json(PAYMENT_HISTORY_FILE, data)
 
     print(f'Deleted {len(to_delete)} bill(s).')
     return to_delete
@@ -87,7 +73,7 @@ def reprocess_bills(bills, indices):
 
     # Remove from processed_photos.json
     if photo_ids_to_remove:
-        photos_data = load_json(PROCESSED_PHOTOS_FILE)
+        photos_data = load_json(PROCESSED_PHOTOS_FILE, {})
         processed = photos_data.get('processed', [])
         original_count = len(processed)
         processed = [p for p in processed if p not in photo_ids_to_remove]
@@ -98,11 +84,11 @@ def reprocess_bills(bills, indices):
             print(f'Removed {removed} photo ID(s) from processed list.')
 
     # Also delete the bills from history so they don't show as duplicates
-    data = load_json(HISTORY_FILE)
+    data = load_json(PAYMENT_HISTORY_FILE, {})
     bill_ids_to_remove = {b.get('id') for b in to_reprocess}
     data['pending'] = [b for b in data.get('pending', []) if b.get('id') not in bill_ids_to_remove]
     data['history'] = [b for b in data.get('history', []) if b.get('id') not in bill_ids_to_remove]
-    save_json(HISTORY_FILE, data)
+    save_json(PAYMENT_HISTORY_FILE, data)
 
     print(f'Marked {len(to_reprocess)} bill(s) for reprocessing.')
     print('Run a poll to pick them up again.')
