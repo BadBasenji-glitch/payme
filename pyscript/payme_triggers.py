@@ -118,7 +118,7 @@ def run_script(command: str, *args) -> dict:
             cmd,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=600,  # 10 minutes - poll can be slow with many photos
             env=get_script_env(),
             cwd=SCRIPTS_PATH,
         )
