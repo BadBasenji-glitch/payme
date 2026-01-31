@@ -20,6 +20,7 @@ class PaymeCard extends HTMLElement {
     this._selectedBill = null;
     this._activeTab = 'pending';
     this._clickHandlerBound = false;
+    this._isLoading = false;
   }
 
   connectedCallback() {
@@ -226,24 +227,38 @@ class PaymeCard extends HTMLElement {
   }
 
   async _approveBill(billId) {
-    if (!this._hass) return;
+    if (!this._hass || this._isLoading) return;
+
+    this._isLoading = 'approve';
+    this._render();
 
     try {
       await this._hass.callService('pyscript', 'payme_approve', { bill_id: billId });
-      this._closeDetail();
+      // Wait a moment for the service to process
+      await new Promise(resolve => setTimeout(resolve, 500));
     } catch (e) {
       console.error('Failed to approve bill:', e);
+    } finally {
+      this._isLoading = false;
+      this._closeDetail();
     }
   }
 
   async _rejectBill(billId) {
-    if (!this._hass) return;
+    if (!this._hass || this._isLoading) return;
+
+    this._isLoading = 'reject';
+    this._render();
 
     try {
       await this._hass.callService('pyscript', 'payme_reject', { bill_id: billId });
-      this._closeDetail();
+      // Wait a moment for the service to process
+      await new Promise(resolve => setTimeout(resolve, 500));
     } catch (e) {
       console.error('Failed to reject bill:', e);
+    } finally {
+      this._isLoading = false;
+      this._closeDetail();
     }
   }
 
@@ -425,11 +440,13 @@ class PaymeCard extends HTMLElement {
 
         ${isPending ? `
           <div class="action-buttons">
-            <button class="btn btn-primary">
-              <ha-icon icon="mdi:check"></ha-icon> Approve
+            <button class="btn btn-primary ${this._isLoading === 'approve' ? 'loading' : ''}" ${this._isLoading ? 'disabled' : ''}>
+              <ha-icon icon="${this._isLoading === 'approve' ? 'mdi:loading' : 'mdi:check'}"></ha-icon>
+              ${this._isLoading === 'approve' ? 'Approving...' : 'Approve'}
             </button>
-            <button class="btn btn-danger">
-              <ha-icon icon="mdi:close"></ha-icon> Reject
+            <button class="btn btn-danger ${this._isLoading === 'reject' ? 'loading' : ''}" ${this._isLoading ? 'disabled' : ''}>
+              <ha-icon icon="${this._isLoading === 'reject' ? 'mdi:loading' : 'mdi:close'}"></ha-icon>
+              ${this._isLoading === 'reject' ? 'Rejecting...' : 'Reject'}
             </button>
           </div>
         ` : ''}
@@ -829,6 +846,20 @@ class PaymeCard extends HTMLElement {
       .btn-danger {
         background: #f44336;
         color: white;
+      }
+
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .btn.loading ha-icon {
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
       }
 
       .warning-banner {
