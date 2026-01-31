@@ -20,20 +20,24 @@ def find_bill(bill_id):
 
 
 def list_pending():
-    """List pending bills."""
+    """List pending bills with numbers for selection."""
     data = load_json(PAYMENT_HISTORY_FILE, {})
     pending = data.get('pending', [])
 
     if not pending:
         print('No pending bills.')
-        return
+        return []
 
     print()
     print('PENDING BILLS:')
     print('-' * 70)
-    for b in pending:
-        print(f"  {b.get('id')}  {b.get('amount'):>8.2f} {b.get('currency', 'EUR')}  {b.get('recipient', '')[:35]}")
+    print(f"{'#':<4} {'Amount':>10}  {'Recipient':<40}")
+    print('-' * 70)
+    for i, b in enumerate(pending, 1):
+        amount = f"{b.get('amount', 0):.2f} {b.get('currency', 'EUR')}"
+        print(f"{i:<4} {amount:>10}  {b.get('recipient', '')[:40]}")
     print()
+    return pending
 
 
 def show_bill(bill):
@@ -131,10 +135,24 @@ def edit_field(bill, field_num):
 
 def main():
     if len(sys.argv) < 2:
-        # No bill ID provided - show list and prompt
-        list_pending()
-        bill_id = input('Enter bill ID to edit (or q to quit): ').strip()
-        if bill_id.lower() == 'q':
+        # No bill ID provided - show numbered list and prompt
+        pending = list_pending()
+        if not pending:
+            return
+
+        choice = input('Enter bill number to edit (or q to quit): ').strip()
+        if choice.lower() == 'q':
+            return
+
+        try:
+            num = int(choice)
+            if 1 <= num <= len(pending):
+                bill_id = pending[num - 1].get('id')
+            else:
+                print('Invalid number.')
+                return
+        except ValueError:
+            print('Invalid input.')
             return
     else:
         bill_id = sys.argv[1]
@@ -145,7 +163,7 @@ def main():
         print(f'Bill not found: {bill_id}')
         return
 
-    print(f'\nFound bill in {collection}.')
+    print(f'\nEditing bill from {collection}.')
 
     modified = False
     while True:
